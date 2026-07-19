@@ -16,4 +16,11 @@ claude plugin marketplace list
 claude plugin install <plugin>@sandro-claude-tooling
 ```
 
-More plugins are on the way. Check back soon.
+## Plugins
+
+| Plugin | Summary | Usage |
+|---|---|---|
+| `context-window-manager` | Session context-window handoff and resume: save session state to a per-repo `CONTEXT-*.md` file and resume from it with git-drift and stale-reference checks. | `context-window-handoff` (save state), `context-window-resume` (restore state) |
+
+Every new plugin **must add a row** here as part of shipping it. More plugins
+are on the way.
