@@ -1,0 +1,6 @@
+{
+  "name": "sandro-claude-tooling",
+  "owner": { "name": "Sandro" },
+  "plugins": [ { "name": "stub", "source": "./plugins/stub" } ],
+  "renames": {}
+}
