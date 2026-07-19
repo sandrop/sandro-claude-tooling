@@ -2,7 +2,7 @@
 name: context-window-handoff
 version: 0.2.0
 version-date: 2026-07-19
-description: This skill should be used when Sandro runs "/context-window-handoff", asks to "save the session", "hand off the context window", or wants to clear and later resume the current session. Saves session state to ~/.claude/.sct/context-window-manager/<repo-slug>/CONTEXT-{timestamp}.md including a Session Metadata block with the git HEAD SHA (full and short) and branch for resume-time drift detection.
+description: This skill should be used when you run "/context-window-handoff", ask to "save the session", "hand off the context window", or want to clear and later resume the current session. Saves session state to ~/.claude/.sct/context-window-manager/<repo-slug>/CONTEXT-{timestamp}.md including a Session Metadata block with the git HEAD SHA (full and short) and branch for resume-time drift detection.
 ---
 
 # Context Window Handoff
@@ -13,7 +13,7 @@ Save the current session state to a timestamped `CONTEXT-*.md` file so the conte
 
 - `/context-window-handoff`.
 - "save the session", "hand off the context window", "checkpoint before I clear context".
-- Wrapping up a working session that Sandro intends to resume in a fresh window.
+- Wrapping up a working session that you intend to resume in a fresh window.
 
 ## Output File
 
@@ -48,7 +48,7 @@ Save to: `~/.claude/.sct/context-window-manager/<repo-slug>/CONTEXT-{YYYY-MM-DD-
    ```
    Pass the values to `context_schema.render_metadata_block(sha, sha_short, branch)` and append its output to the CONTEXT file. When cwd is not a git repo (the repo check fails), render the block with `n/a` values via the same helper so the block is always present and well-formed. This block is exactly what context-window-resume reads to compute drift, so it must be written by the helper, not hand-formatted.
 
-5. **Confirm and print the resume command.** Confirm the file was saved and display the exact command Sandro should run to resume:
+5. **Confirm and print the resume command.** Confirm the file was saved and display the exact command you should run to resume:
    ```
    Context saved to: ~/.claude/.sct/context-window-manager/<repo-slug>/CONTEXT-<timestamp>.md
 

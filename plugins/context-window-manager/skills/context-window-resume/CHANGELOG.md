@@ -3,6 +3,7 @@
 ## 0.2.0 - 2026-07-19
 
 - Read the most recent `CONTEXT-*.md` from the home-scoped, per-repo path `~/.claude/.sct/context-window-manager/<repo-slug>/` instead of the retired project-local path. Packaged into the context-window-manager plugin; invokes its validator via `${CLAUDE_PLUGIN_ROOT}`.
+- Genericized skill copy (second-person `you`, no personal names) for public distribution (pre-release).
 
 ## 0.1.0 - 2026-07-02
 

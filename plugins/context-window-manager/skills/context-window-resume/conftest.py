@@ -9,6 +9,6 @@ subprocess). Only the shared library dir goes on the path.
 import sys
 from pathlib import Path
 
-_COMMON = Path(__file__).resolve().parent.parent / "context-window-common"
+_COMMON = Path(__file__).resolve().parent.parent.parent / "lib" / "context-window-common"
 if str(_COMMON) not in sys.path:
     sys.path.insert(0, str(_COMMON))

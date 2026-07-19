@@ -9,7 +9,7 @@ def _looks_like_path(tok: str) -> bool:
     # Require a real path separator. This deliberately drops bare filenames
     # (`foo.py`) to avoid false positives on prose that merely looks dotted:
     # dotted attributes (`obj.map`), version strings (`3.14`), and library
-    # names (`Node.js`) all lack a slash. Sandro's handoff convention cites
+    # names (`Node.js`) all lack a slash. Your handoff convention cites
     # paths with a directory (`src/app.py:42`), so requiring `/` keeps real
     # refs while cutting the noise that matters most for the stale-ref report.
     if "/" not in tok:

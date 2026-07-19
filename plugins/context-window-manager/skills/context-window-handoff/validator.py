@@ -5,7 +5,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-COMMON = Path(__file__).resolve().parent.parent / "context-window-common"
+COMMON = Path(__file__).resolve().parent.parent.parent / "lib" / "context-window-common"
 sys.path.insert(0, str(COMMON))
 
 
