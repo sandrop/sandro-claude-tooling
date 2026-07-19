@@ -1,0 +1,5 @@
+{
+  "name": "context-window-manager",
+  "description": "Session context-window handoff and resume: save session state to a home-scoped, per-repo CONTEXT-*.md file (~/.claude/.sct/context-window-manager/<repo-slug>/) and resume from it with git-drift and stale-reference checks.",
+  "version": "0.1.0"
+}

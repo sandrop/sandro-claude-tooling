@@ -1,6 +1,6 @@
 {
   "name": "sandro-claude-tooling",
   "owner": { "name": "Sandro" },
-  "plugins": [ { "name": "stub", "source": "./plugins/stub" } ],
-  "renames": {}
+  "plugins": [ { "name": "context-window-manager", "source": "./plugins/context-window-manager" } ],
+  "renames": { "stub": "context-window-manager" }
 }
