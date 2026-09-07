@@ -1,0 +1,19 @@
+# Markdownlint configuration for ~/.claude
+# Skill files and docs use patterns that conflict with strict defaults.
+default: true
+MD007: false  # ul-indent: skill files use 4-space indentation
+MD012: false  # no-multiple-blanks: some files use extra blank lines for visual spacing
+MD013: false  # line-length: skill files and READMEs routinely have long lines
+MD022: false  # blanks-around-headings: YAML frontmatter triggers false positives
+MD024: false  # no-duplicate-heading: CHANGELOGs legitimately repeat headings (e.g. "Tests")
+MD031: false  # blanks-around-fences: conflicts with embedded code in lists
+MD032: false  # blanks-around-lists: conflicts with frontmatter and skill prose style
+MD034: false  # no-bare-urls: fixture files deliberately contain raw URLs
+MD036: false  # no-emphasis-as-heading: skill files use bold as section labels
+MD037: false  # no-space-in-emphasis: false positives in complex inline markup
+MD040: false  # fenced-code-language: many existing code blocks omit the language
+MD033: false  # no-inline-html: Claude XML tags (<example>, <Task>, etc.) appear in agent definition files
+MD038: false  # no-space-in-code: skill files use leading spaces in code spans for alignment
+MD041: false  # first-line-heading: YAML frontmatter means first line is not a heading
+MD050: false  # strong-style: __tests__/** glob patterns are parsed as underscore bold throughout
+MD056: false  # table-column-count: historical skill tables have inconsistent column counts

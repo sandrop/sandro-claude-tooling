@@ -1,0 +1,211 @@
+# Pre-commit hooks configuration
+#
+# Install:  uv tool install pre-commit   (or: pipx install pre-commit)
+#           pre-commit install
+# Run:      pre-commit run --all-files
+# CI:       SKIP=no-commit-to-branch pre-commit run --all-files --show-diff-on-failure
+#           (no-commit-to-branch fails unconditionally on a CI checkout of main)
+#
+# COMPANION FILES - these must travel with this config or hooks misbehave:
+#   .yamllint.yaml   yamllint rules; without it yamllint falls back to its
+#                    strict default profile instead of `relaxed`
+#   .sqlfluff        SQL dialect; SQLFluff hard-errors with no dialect set
+#   biome.json       Biome rules; without it Biome uses built-in defaults
+#                    (`biome init` generates a starter)
+#   pyproject.toml   Ruff rules, plus the vendor force-exclude
+
+minimum_pre_commit_version: "3.5.0"
+
+# Wires up both stages on a plain `pre-commit install`, so contributors do not
+# silently skip pre-push hooks if any are added later.
+default_install_hook_types: [pre-commit, pre-push]
+
+default_language_version:
+  python: python3.12
+
+# Verbose (?x) regex so this stays readable as it grows.
+#
+# skills/sp-git-pr-code-review/vendor: vendored third-party scanners must stay
+# byte-for-byte to keep the upstream sha256 drift check green (CCC-0166).
+# pyproject.toml handles this for Ruff via force-exclude, but end-of-file-fixer
+# and trailing-whitespace know nothing about [tool.ruff] and will rewrite those
+# files in place, so the exclusion has to live here too.
+exclude: |
+  (?x)^(
+    node_modules|
+    new-project-resources|
+    skills-reference|
+    reports|
+    hooks|
+    skills/sp-git-pr-code-review/vendor
+  )/
+
+repos:
+  # ---------------------------------------------------------------------------
+  # Local fixer, first: rewrites a file that check-json below then validates.
+  #
+  # Scrubs volatile `lastUpdated` timestamps from harness-managed marketplace
+  # state so plugins/known_marketplaces.json stops churning the working tree on
+  # every plugin install/update (CCC-0102).
+  # ---------------------------------------------------------------------------
+  - repo: local
+    hooks:
+      - id: scrub-known-marketplaces-timestamp
+        name: scrub known_marketplaces.json lastUpdated
+        entry: python3 scripts/scrub_known_marketplaces_timestamp.py
+        language: system
+        files: ^plugins/known_marketplaces\.json$
+        pass_filenames: true
+
+  # ---------------------------------------------------------------------------
+  # General file hygiene. Fixers run before the linters below so that a single
+  # `pre-commit run` converges in one pass instead of two.
+  # ---------------------------------------------------------------------------
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      # --- Fixers ---
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: mixed-line-ending
+
+      # --- Safety ---
+      # Refuse direct commits to main/master. Force feature-branch workflow
+      # so the primary worktree (which always sits on main) stays clean.
+      - id: no-commit-to-branch
+        name: no-commit-to-main
+        args: [--branch, main, --branch, master]
+      - id: detect-private-key
+      - id: check-added-large-files
+        args: [--maxkb=1000]
+      - id: check-merge-conflict
+      - id: check-case-conflict
+      - id: destroyed-symlinks
+
+      # --- Parse validation ---
+      - id: check-json
+      - id: check-yaml
+        args: [--allow-multiple-documents]
+      - id: check-toml
+      - id: check-ast
+
+      # --- Python ---
+      - id: debug-statements
+
+      # --- Shell (pairs with shellcheck below) ---
+      # shellcheck will not tell you a script lost its +x bit; these will.
+      - id: check-shebang-scripts-are-executable
+      - id: check-executables-have-shebangs
+
+  # ---------------------------------------------------------------------------
+  # Python - Ruff (linting + formatting)
+  # ---------------------------------------------------------------------------
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.16.6
+    hooks:
+      # Hook id is `ruff-check`; the old `ruff` id was renamed upstream.
+      - id: ruff-check
+        types_or: [python, pyi]
+        args: [--fix]
+      - id: ruff-format
+        # types_or pinned deliberately: recent ruff-format also formats Python
+        # code blocks inside Markdown by default. Several .md trees here are
+        # harness-generated or vendored, and Ruff does not honor the
+        # markdownlint excludes below, so keep it off Markdown entirely.
+        types_or: [python, pyi]
+
+  # ---------------------------------------------------------------------------
+  # JS/TS - Biome (lint + format + import organization, one binary)
+  #
+  # Requires a biome.json at the repo root; without one Biome falls back to
+  # built-in defaults, which is probably not what you want long term.
+  #
+  # Scoped to JS/TS on purpose. Biome also formats JSON/JSONC by default, which
+  # would fight the harness-managed JSON in plugins/ (see the scrub hook above)
+  # and any .claude/ settings files. Widen this deliberately, not by accident.
+  # ---------------------------------------------------------------------------
+  - repo: https://github.com/biomejs/pre-commit
+    rev: v2.5.5
+    hooks:
+      - id: biome-check
+        files: \.(jsx?|tsx?|mjs|cjs|mts|cts)$
+
+  # ---------------------------------------------------------------------------
+  # SQL - SQLFluff
+  #
+  # Both hooks declare `types: [sql]`, so pre-commit skips them entirely when no
+  # .sql files are staged. No extra config needed for the no-op case.
+  #
+  # fix runs before lint: reversed, lint fails on violations that fix would have
+  # resolved a moment later, and you need two runs to converge.
+  #
+  # Dialect and rules live in .sqlfluff at the repo root, so the hook, a bare
+  # `sqlfluff lint` run, and editor integrations all agree. SQLFluff has no
+  # usable default dialect and hard-errors without one, so .sqlfluff is required,
+  # not optional.
+  #
+  # This is the slowest hook in the config. If a project accumulates enough SQL
+  # that commits get painful, move the lint hook to `stages: [pre-push]`.
+  # ---------------------------------------------------------------------------
+  - repo: https://github.com/sqlfluff/sqlfluff
+    rev: 4.3.0
+    hooks:
+      - id: sqlfluff-fix
+      - id: sqlfluff-lint
+
+  # ---------------------------------------------------------------------------
+  # Markdown - markdownlint-cli2
+  #
+  # CLAUDE.md is a harness-aggregated file (graphify/RTK/etc. append their own
+  # top-level sections), so MD025 single-h1 does not apply.
+  # skills/graphify/references/ are vendored skill docs (refreshed on graphify
+  # updates), not Sandro-authored prose. Both excluded per CCC-0117.
+  #
+  # NOTE: these excludes disable *every* rule on the listed paths. For CLAUDE.md
+  # specifically, a scoped `MD025: false` in .markdownlint-cli2.yaml would keep
+  # the rest of the linting active. Worth doing if that file matters.
+  # ---------------------------------------------------------------------------
+  - repo: https://github.com/DavidAnson/markdownlint-cli2
+    rev: v0.17.1
+    hooks:
+      - id: markdownlint-cli2
+        exclude: |
+          (?x)(
+            ^persona-roles/ai-cto/cto-mentor\.md$|
+            ^skills/sp-git-pr-code-review/agents/|
+            (^|/)CLAUDE\.md$|
+            ^skills/graphify/references/
+          )
+
+  # ---------------------------------------------------------------------------
+  # YAML - yamllint
+  # Rules live in .yamllint.yaml so the editor integration, a bare `yamllint`
+  # run, and this hook all agree.
+  # ---------------------------------------------------------------------------
+  - repo: https://github.com/adrienverge/yamllint
+    rev: v1.35.1
+    hooks:
+      - id: yamllint
+
+  # ---------------------------------------------------------------------------
+  # Shell - ShellCheck
+  # ---------------------------------------------------------------------------
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.10.0.1
+    hooks:
+      - id: shellcheck
+
+  # ---------------------------------------------------------------------------
+  # Secrets - gitleaks
+  #
+  # No `language: system` override: pre-commit builds the pinned version itself,
+  # so `rev` is actually enforced and every contributor and CI runner gets the
+  # same rule set. The upstream default entry is already
+  # `gitleaks git --pre-commit --redact --staged`, which is the staged-diff scan
+  # mode we want (plain `gitleaks detect` scans committed history and would miss
+  # the pending commit).
+  # ---------------------------------------------------------------------------
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.24.2
+    hooks:
+      - id: gitleaks

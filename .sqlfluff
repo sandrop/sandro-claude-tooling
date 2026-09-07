@@ -1,0 +1,43 @@
+# SQLFluff configuration
+#
+# Required companion to .pre-commit-config.yaml: SQLFluff has no usable default
+# dialect and will hard-error without one. Keeping it here rather than in the
+# hook's `args` means the pre-commit hook, a bare `sqlfluff lint` run, and
+# editor integrations all apply the same rules.
+#
+# CHANGE THE DIALECT per project. Supported values include snowflake, bigquery,
+# postgres, redshift, databricks, duckdb, tsql, trino, athena, mysql, sparksql.
+
+[sqlfluff]
+dialect = snowflake
+templater = jinja
+max_line_length = 120
+
+# Rules to skip. Trim this to taste; these are the ones most likely to fight
+# an existing codebase rather than improve it.
+#   L034/ST06  enforces a specific SELECT column ordering
+#   RF04       flags keywords used as identifiers, noisy on warehouse schemas
+exclude_rules = ST06, RF04
+
+[sqlfluff:indentation]
+indented_joins = false
+indented_using_on = true
+template_blocks_indent = false
+
+[sqlfluff:layout:type:comma]
+line_position = trailing
+
+[sqlfluff:rules:capitalisation.keywords]
+capitalisation_policy = upper
+
+[sqlfluff:rules:capitalisation.identifiers]
+extended_capitalisation_policy = lower
+
+[sqlfluff:rules:capitalisation.functions]
+extended_capitalisation_policy = upper
+
+# dbt projects: set `templater = dbt` above instead of jinja, and add
+#   additional_dependencies: ["sqlfluff-templater-dbt"]
+# to both sqlfluff hooks in .pre-commit-config.yaml. Note this is substantially
+# slower and needs a working dbt profile available at hook run time, which is
+# a real friction point in CI.
