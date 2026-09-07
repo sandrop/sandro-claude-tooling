@@ -1,0 +1,3 @@
+# Files excluded from markdownlint
+# persona files that embed YAML fragments confusing setext heading detection
+persona-roles/ai-cto/cto-mentor.md

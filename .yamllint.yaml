@@ -1,0 +1,11 @@
+# yamllint configuration
+#
+# Extracted from the inline `args: [-d, "{extends: relaxed, ...}"]` that used to
+# live in .pre-commit-config.yaml, so that the pre-commit hook, a bare
+# `yamllint .` run, and editor integrations all apply the same rules.
+
+extends: relaxed
+
+rules:
+  line-length:
+    max: 120
