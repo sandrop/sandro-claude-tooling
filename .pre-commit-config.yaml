@@ -125,7 +125,7 @@ repos:
   # and any .claude/ settings files. Widen this deliberately, not by accident.
   # ---------------------------------------------------------------------------
   - repo: https://github.com/biomejs/pre-commit
-    rev: v2.5.5
+    rev: v2.5.12
     hooks:
       - id: biome-check
         files: \.(jsx?|tsx?|mjs|cjs|mts|cts)$
@@ -166,7 +166,7 @@ repos:
   # the rest of the linting active. Worth doing if that file matters.
   # ---------------------------------------------------------------------------
   - repo: https://github.com/DavidAnson/markdownlint-cli2
-    rev: v0.17.1
+    rev: v0.23.2
     hooks:
       - id: markdownlint-cli2
         exclude: |
@@ -174,7 +174,9 @@ repos:
             ^persona-roles/ai-cto/cto-mentor\.md$|
             ^skills/sp-git-pr-code-review/agents/|
             (^|/)CLAUDE\.md$|
-            ^skills/graphify/references/
+            ^skills/graphify/references/|
+            ^plugins/[^/]+/src/[^/]+/templates/|
+            ^plugins/[^/]+/tests/fixtures/
           )
 
   # ---------------------------------------------------------------------------
@@ -183,7 +185,7 @@ repos:
   # run, and this hook all agree.
   # ---------------------------------------------------------------------------
   - repo: https://github.com/adrienverge/yamllint
-    rev: v1.35.1
+    rev: v1.38.0
     hooks:
       - id: yamllint
 
@@ -191,7 +193,7 @@ repos:
   # Shell - ShellCheck
   # ---------------------------------------------------------------------------
   - repo: https://github.com/shellcheck-py/shellcheck-py
-    rev: v0.10.0.1
+    rev: v0.11.0.1-1
     hooks:
       - id: shellcheck
 
@@ -206,6 +208,6 @@ repos:
   # the pending commit).
   # ---------------------------------------------------------------------------
   - repo: https://github.com/gitleaks/gitleaks
-    rev: v8.24.2
+    rev: v8.30.0
     hooks:
       - id: gitleaks
