@@ -27,7 +27,9 @@ default_language_version:
 #
 # skills/sp-git-pr-code-review/vendor: vendored third-party scanners must stay
 # byte-for-byte to keep the upstream sha256 drift check green (CCC-0166).
-# pyproject.toml handles this for Ruff via force-exclude, but end-of-file-fixer
+# skills/cobtask-review/snapshots: the committed content-snapshot store, byte-
+# frozen copies of the decommissioned sources hashed into manifest.json (CCC-0353).
+# pyproject.toml handles both for Ruff via force-exclude, but end-of-file-fixer
 # and trailing-whitespace know nothing about [tool.ruff] and will rewrite those
 # files in place, so the exclusion has to live here too.
 exclude: |
@@ -37,7 +39,8 @@ exclude: |
     skills-reference|
     reports|
     hooks|
-    skills/sp-git-pr-code-review/vendor
+    skills/sp-git-pr-code-review/vendor|
+    skills/cobtask-review/snapshots
   )/
 
 repos:
@@ -206,8 +209,16 @@ repos:
   # `gitleaks git --pre-commit --redact --staged`, which is the staged-diff scan
   # mode we want (plain `gitleaks detect` scans committed history and would miss
   # the pending commit).
+  #
+  # always_run: true so the top-level `exclude` cannot suppress secret scanning.
+  # gitleaks scans the whole staged diff (`--staged`, pass_filenames: false), so
+  # without this a commit whose files ALL match `exclude` (e.g. a snapshot-only
+  # refresh under skills/cobtask-review/snapshots) skips the hook entirely and a
+  # secret could land unscanned. `.gitleaksignore` still suppresses documented
+  # false positives per fingerprint (CCC-0353).
   # ---------------------------------------------------------------------------
   - repo: https://github.com/gitleaks/gitleaks
     rev: v8.30.0
     hooks:
       - id: gitleaks
+        always_run: true
