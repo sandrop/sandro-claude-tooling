@@ -17,3 +17,4 @@ MD038: false  # no-space-in-code: skill files use leading spaces in code spans f
 MD041: false  # first-line-heading: YAML frontmatter means first line is not a heading
 MD050: false  # strong-style: __tests__/** glob patterns are parsed as underscore bold throughout
 MD056: false  # table-column-count: historical skill tables have inconsistent column counts
+MD060: false  # table-column-style: wide catalog tables have short headers and 200+ char cells; neither compact nor aligned is satisfiable without grotesque header padding
