@@ -12,7 +12,7 @@
 #   .sqlfluff        SQL dialect; SQLFluff hard-errors with no dialect set
 #   biome.json       Biome rules; without it Biome uses built-in defaults
 #                    (`biome init` generates a starter)
-#   pyproject.toml   Ruff rules, plus the vendor force-exclude
+#   pyproject.toml   Ruff rules
 
 minimum_pre_commit_version: "3.5.0"
 
@@ -25,13 +25,10 @@ default_language_version:
 
 # Verbose (?x) regex so this stays readable as it grows.
 #
-# skills/sp-git-pr-code-review/vendor: vendored third-party scanners must stay
-# byte-for-byte to keep the upstream sha256 drift check green (CCC-0166).
 # skills/cobtask-review/snapshots: the committed content-snapshot store, byte-
 # frozen copies of the decommissioned sources hashed into manifest.json (CCC-0353).
-# pyproject.toml handles both for Ruff via force-exclude, but end-of-file-fixer
-# and trailing-whitespace know nothing about [tool.ruff] and will rewrite those
-# files in place, so the exclusion has to live here too.
+# end-of-file-fixer and trailing-whitespace would rewrite those files in place,
+# so the exclusion has to live here.
 exclude: |
   (?x)^(
     node_modules|
@@ -39,7 +36,6 @@ exclude: |
     skills-reference|
     reports|
     hooks|
-    skills/sp-git-pr-code-review/vendor|
     skills/cobtask-review/snapshots
   )/
 
@@ -175,7 +171,6 @@ repos:
         exclude: |
           (?x)(
             ^persona-roles/ai-cto/cto-mentor\.md$|
-            ^skills/sp-git-pr-code-review/agents/|
             (^|/)CLAUDE\.md$|
             ^skills/graphify/references/|
             ^plugins/[^/]+/src/[^/]+/templates/|
