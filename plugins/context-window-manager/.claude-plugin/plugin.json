@@ -1,5 +1,11 @@
 {
   "name": "context-window-manager",
-  "description": "Session context-window handoff and resume: save session state to a home-scoped, per-repo CONTEXT-*.md file (~/.claude/.sct/context-window-manager/<repo-slug>/) and resume from it with git-drift and stale-reference checks.",
-  "version": "0.1.0"
+  "description": "Session context-window handoff and resume: save session state to a home-scoped, per-repo CONTEXT-*.md file (~/.config/sct/context-window-manager/<repo-slug>/) and resume from it with git-drift and stale-reference checks.",
+  "version": "1.0.1",
+  "version-date": "2026-10-23",
+  "author": { "name": "Sandro", "email": "sandrogithub@pm.me" },
+  "homepage": "https://github.com/sandrop/sandro-claude-tooling/tree/main/plugins/context-window-manager",
+  "repository": "https://github.com/sandrop/sandro-claude-tooling",
+  "license": "MIT",
+  "keywords": ["context-window", "session-handoff", "resume", "claude-code", "context-management"]
 }

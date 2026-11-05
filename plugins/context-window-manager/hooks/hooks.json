@@ -1,0 +1,17 @@
+{
+  "description": "PreCompact failsafe: write a resumable CONTEXT-*.md snapshot at the compaction boundary (manual /compact or autocompaction) before any manual /context-window-manager:handoff runs.",
+  "hooks": {
+    "PreCompact": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/precompact_handoff.py\"",
+            "timeout": 20
+          }
+        ]
+      }
+    ]
+  }
+}

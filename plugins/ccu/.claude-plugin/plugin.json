@@ -1,0 +1,11 @@
+{
+  "name": "ccu",
+  "description": "Forecast weekly Claude Code quota usage: project a finish percentage, per-active-day burn-down rate, and exhaustion date from current usage and the next reset, weighting elapsed time by configured active hours and blackout days.",
+  "version": "0.5.0",
+  "version-date": "2026-08-25",
+  "author": { "name": "Sandro", "email": "sandrogithub@pm.me" },
+  "homepage": "https://github.com/sandrop/sandro-claude-tooling/tree/main/plugins/ccu",
+  "repository": "https://github.com/sandrop/sandro-claude-tooling",
+  "license": "MIT",
+  "keywords": ["ccu", "claude-code-usage", "forecast", "quota", "claude-code"]
+}

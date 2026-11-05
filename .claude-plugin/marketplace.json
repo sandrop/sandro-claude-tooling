@@ -1,12 +1,53 @@
 {
   "name": "sandro-claude-tooling",
   "owner": {
-    "name": "Sandro"
+    "name": "Sandro",
+    "email": "sandrogithub@pm.me"
   },
+  "allowCrossMarketplaceDependenciesOn": [
+    "claude-plugins-official"
+  ],
   "plugins": [
     {
       "name": "context-window-manager",
-      "source": "./plugins/context-window-manager"
+      "source": "./plugins/context-window-manager",
+      "description": "Session context-window handoff and resume: save session state to a home-scoped, per-repo CONTEXT-*.md file and resume from it with git-drift and stale-reference checks.",
+      "version": "1.0.1",
+      "keywords": [
+        "context-window",
+        "session-handoff",
+        "resume",
+        "claude-code",
+        "context-management"
+      ]
+    },
+    {
+      "name": "ccu",
+      "source": "./plugins/ccu",
+      "description": "Forecast weekly Claude Code quota usage: project a finish percentage, per-active-day burn-down rate, and exhaustion date from current usage and the next reset, weighting elapsed time by configured active hours and blackout days.",
+      "version": "0.5.0",
+      "keywords": [
+        "ccu",
+        "claude-code-usage",
+        "forecast",
+        "quota",
+        "claude-code"
+      ]
+    },
+    {
+      "name": "test-pruner",
+      "source": {
+        "source": "github",
+        "repo": "sandrop/test-pruner",
+        "ref": "v0.1.0"
+      },
+      "description": "Map test layers, find redundant tests, and plan safe pruning.",
+      "version": "0.1.0",
+      "keywords": [
+        "testing",
+        "claude-code",
+        "plugin"
+      ]
     }
   ],
   "renames": {

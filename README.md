@@ -20,7 +20,8 @@ claude plugin install <plugin>@sandro-claude-tooling
 
 | Plugin | Summary | Usage |
 |---|---|---|
-| `context-window-manager` | Session context-window handoff and resume: save session state to a per-repo `CONTEXT-*.md` file and resume from it with git-drift and stale-reference checks. | `context-window-handoff` (save state), `context-window-resume` (restore state) |
+| `context-window-manager` | Session context-window handoff and resume: save session state to a per-repo `CONTEXT-*.md` file and resume from it with git-drift and stale-reference checks. | `/context-window-manager:handoff` (save state), `/context-window-manager:resume` (restore state) |
 
-Every new plugin **must add a row** here as part of shipping it. More plugins
-are on the way.
+`jiranator` now ships from its own marketplace at
+[`sandrop/jiranator`](https://github.com/sandrop/jiranator)
+(`claude plugin marketplace add sandrop/jiranator`).

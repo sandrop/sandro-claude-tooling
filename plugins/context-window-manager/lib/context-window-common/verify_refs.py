@@ -57,9 +57,7 @@ def verify_refs(refs: list, cwd: str) -> list:
                 home_resolved
             ):
                 try:
-                    n = len(
-                        p.read_text(encoding="utf-8", errors="ignore").splitlines()
-                    )
+                    n = len(p.read_text(encoding="utf-8", errors="ignore").splitlines())
                     line_ok = r["line"] <= n
                 except OSError:
                     line_ok = None

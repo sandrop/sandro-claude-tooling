@@ -1,5 +1,5 @@
 """Make this skill's modules importable as top-level modules from any test
-in this directory. Mirrors the sp-request-review conftest pattern; needed
+in this directory. Mirrors the per-skill conftest pattern; needed
 because the repo runs pytest with --import-mode=importlib, which does not
 add the test file's directory to sys.path."""
 

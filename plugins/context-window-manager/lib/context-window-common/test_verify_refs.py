@@ -59,7 +59,12 @@ def test_out_of_tree_file_exists_but_is_not_read(tmp_path):
 
 
 def test_tilde_prefixed_nonexistent_token_does_not_raise(tmp_path):
-    refs = [{"raw": "`~/does-not-exist-xyz.py`", "path": "~/does-not-exist-xyz.py",
-             "line": None}]
+    refs = [
+        {
+            "raw": "`~/does-not-exist-xyz.py`",
+            "path": "~/does-not-exist-xyz.py",
+            "line": None,
+        }
+    ]
     res = verify_refs.verify_refs(refs, str(tmp_path))[0]
     assert res["exists"] is False
