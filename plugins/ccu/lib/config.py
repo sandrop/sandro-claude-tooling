@@ -193,6 +193,11 @@ def default_config_dir() -> Path:
     return claude_root() / ".sct" / "ccu" / "config"
 
 
+def default_tap_file() -> Path:
+    """Where ``ccu_tap.py`` records the statusline ``rate_limits`` object."""
+    return claude_root() / ".sct" / "ccu" / "usage.json"
+
+
 def default_config_path() -> Path:
     """The default config file ccu reads when ``--config`` is not passed."""
     return default_config_dir() / "ccu.yaml"

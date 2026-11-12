@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.2.0 - 2026-11-11
+
+- New Step 6: inside cmux, handoff runs `spawn.py` to open the next workspace right after the current one in its group, boot claude with the caller's `--model` and `--effort`, `/rename` it, and send the resume line so the new session continues with no menu. A same-named workspace already in the group is reused and gets only the resume line. With no config the name gets an incrementing `-N` suffix and inherits the sidebar color; an optional `[[spawn.stages]]` list (`suffix`, `color`, optional `sidebar` for a cmux sidebar color such as `#7D6608`, since cmux has no `yellow`) in `~/.config/sct/context-window-manager/config.toml` switches to stage advance with `/color`, and asks when no stage matches. Opt out with `SCT_CWM_SPAWN=0`; outside cmux or on any cmux failure the spawn is skipped with a reason and the handoff still succeeds. SCT-0078.
+
+## 1.1.0 - 2026-11-11
+
+- The resume paste line (`checks.resume_command`) now ends in ` and continue`, so pasting it resumes straight into the Next Steps when the drift check is clean. SCT-0077.
+
+## 1.0.2 - 2026-11-10
+
+- Docs: Key Context and Skills to invoke on resume now tell the writer never to cite a versioned plugin cache path; name the skill or slash command, or write the command relative to `${CLAUDE_PLUGIN_ROOT}`. An upgrade leaves the old version directory in place, so a cited path runs stale code. SCT-0074.
+
 ## 1.0.1 - 2026-10-25
 
 - Docs: the `Skills to invoke on resume` example names `/cobtask-workflow:cobtask-tdd-plan` and `cobtask-workflow:cobtask-gitops ship` instead of the retired `/sp:tdd-plan` and `sp:git-commit-open-pr`. CCC-0387.

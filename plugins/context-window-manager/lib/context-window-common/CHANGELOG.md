@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.10.0 - 2026-11-11
+
+- Add `context_schema.split_continue_directive(value)`, which returns `(value_without_directive, True)` when the value ends in `and continue` (case-insensitive, any spacing) or a `--continue` token, else `(value, False)`. It strips one directive only. SCT-0077.
+
+## 0.9.1 - 2026-11-11
+
+- `verify_plugin_cache.py` reads the cache marker plus three segments (marketplace, plugin, digit-led version) with one regex and walks back to the previous stop character for the path start, replacing the outward-reading quote tracker. Detection of marketplace, plugin and version is unchanged on every prior test input; the reported `path` is best-effort and stops at whitespace, quotes and shell operators, so a quoted ancestor directory with spaces is truncated. `$HOME/...` and other non-`/`, non-`~` prefixes are now detected. Still linear in text length. SCT-0075.
+
+## 0.9.0 - 2026-11-10
+
+- Add `verify_plugin_cache.py`. `extract_plugin_cache_refs(text)` scans full handoff text for `.claude/plugins/cache/<marketplace>/<plugin>/<version>` paths (tilde or absolute, inside quoted commands too; the version segment must start with a digit so `<version>` placeholders do not match), deduped in first-seen order. `verify_refs` never sees these paths, because its backtick token regex rejects whitespace. `check_plugin_cache_refs(refs, installed_json=None)` compares each cited version with every install record for `<plugin>@<marketplace>` and returns `{stale, notes}`; `installed_json` defaults to `Path.home()` at call time. Read and shape failures become notes and never raise. SCT-0074.
+
 ## 0.8.0 - 2026-09-07
 
 - Add `retention.py`: once/day archival of stale `CONTEXT-*.md` handoffs into a terminal `zArchives/` sibling under `SAVE_ROOT`, move-only (never deletes; honors the `rm` ban). `retention_days(env=None)` resolves `SCT_CWM_RETENTION_DAYS` (default 30) and raises `RetentionConfigError` on a non-int or `< 1` value rather than silently disabling pruning. `parse_context_timestamp(name)` reads the `CONTEXT-<YYYY-MM-DD-HH-MM-SS>` filename as the authoritative age clock (optional hex suffix), and `file_age_days(path, now)` falls back to mtime only when the name is unparseable. `prune(save_root, now, days)` moves stale files into `zArchives/<slug>/`, moving a whole per-repo-slug dir only when every `CONTEXT-*.md` under it is stale (merging file-by-file when a prior archive dir already exists), and never scans `zArchives/` (no re-archiving loop). `maybe_prune(save_root, today, env=None)` gates the walk to at most once per calendar day via a `.last_prune` marker at the save root, propagating config errors before any walk. Consumed by the context-window-handoff pre-flight validator.

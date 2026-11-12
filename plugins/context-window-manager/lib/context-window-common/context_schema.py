@@ -28,6 +28,23 @@ SAVE_ROOT = Path(
 
 META_HEADING = "### Session Metadata"
 
+# The resume directive the handoff paste line ends with: one
+# trailing `and continue` (any case, any spacing) or a `--continue` token.
+_CONTINUE_DIRECTIVE_RE = re.compile(r"\s+(?:and\s+continue|--continue)$", re.IGNORECASE)
+
+
+def split_continue_directive(value: str) -> "tuple[str, bool]":
+    """Strip one trailing resume directive from a --context-file value.
+
+    Returns (value_without_directive, True) on a match, else (value, False).
+    Only one directive is stripped, so any other trailing prose still reaches
+    the validator's appended-text check."""
+    m = _CONTINUE_DIRECTIVE_RE.search(value.rstrip())
+    if not m:
+        return value, False
+    return value.rstrip()[: m.start()], True
+
+
 # Free-text scalars. An empty value renders as the literal 'n/a' so parse
 # round-trips and "we looked and there was nothing" stays distinguishable from
 # a truncated block.
@@ -215,7 +232,7 @@ def context_filename(now: "datetime | None" = None) -> str:
     second-resolution timestamp plus a random 6-hex-char suffix, so two
     parallel sessions handing off within the same second never silently
     overwrite each other's file (both remain on disk for resume to surface)."""
-    ts = (now or datetime.now()).strftime("%Y-%m-%d-%H-%M-%S")
+    ts = (now or datetime.now()).strftime("%Y-%m-%d-%H-%M-%S")  # noqa: DTZ005 - local time by design
     return f"CONTEXT-{ts}-{secrets.token_hex(3)}.md"
 
 
@@ -243,6 +260,7 @@ def repo_slug(cwd: Path, deadline=None) -> str:
                 capture_output=True,
                 text=True,
                 timeout=_GIT_TIMEOUT,
+                check=False,
             )
             base = (
                 Path(r.stdout.strip())
@@ -268,6 +286,7 @@ def worktree_toplevels(cwd: Path) -> "list[Path]":
             capture_output=True,
             text=True,
             timeout=_GIT_TIMEOUT,
+            check=False,
         )
     except (FileNotFoundError, OSError, subprocess.SubprocessError):
         return []

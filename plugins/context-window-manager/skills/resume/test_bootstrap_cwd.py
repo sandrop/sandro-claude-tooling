@@ -34,9 +34,9 @@ def _write_handoff(
     return p
 
 
-def _run(handoff: Path, cwd: Path) -> dict:
+def _run(handoff: "Path | str", cwd: Path, *args: str) -> dict:
     r = subprocess.run(
-        [sys.executable, str(BOOT), "--context-file", str(handoff)],
+        [sys.executable, str(BOOT), "--context-file", str(handoff), *args],
         cwd=cwd,
         capture_output=True,
         text=True,
@@ -323,3 +323,31 @@ def test_control_chars_in_prose_cwd_are_escaped_in_warning(tmp_path):
     joined = " ".join(out["warnings"])
     assert "\x1b" not in joined
     assert "\\x1b" in joined
+
+
+def _continue_fixture(tmp_path: Path) -> Path:
+    repo_b = tmp_path / "repoB"
+    repo_b.mkdir()
+    _git_init(repo_b)
+    return _write_handoff(
+        tmp_path / "sct" / "slugB",
+        "2026-09-03-10-00-00",
+        SessionMetadata(cwd=str(repo_b), git_sha="deadbeef", git_branch="main"),
+    )
+
+
+def test_bootstrap_strips_continue_directive(tmp_path):
+    # The paste line's trailing `and continue` resolves the same
+    # handoff and recorded cwd as the bare path.
+    handoff = _continue_fixture(tmp_path)
+    bare = _run(handoff, tmp_path)
+    out = _run(f"{handoff} and continue", tmp_path)
+    assert out["ok"] is True, out["errors"]
+    assert (out["cwd"], out["recorded"]) == (bare["cwd"], bare["recorded"])
+
+
+def test_bootstrap_accepts_continue_flag(tmp_path):
+    handoff = _continue_fixture(tmp_path)
+    out = _run(handoff, tmp_path, "--continue")
+    assert out["ok"] is True, out["errors"]
+    assert out["bootstrap"] is True

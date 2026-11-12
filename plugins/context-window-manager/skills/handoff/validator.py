@@ -100,9 +100,12 @@ def main(argv=None):
         # bootstrap this exact file (and restore the recorded cwd from it) instead
         # of falling to its no-argument newest-handoff discovery path. No cd prefix:
         # resume's own bootstrap performs the real directory restore from the
-        # context file, so a cd here only duplicated that and added noise.
+        # context file, so a cd here only duplicated that and added noise. The
+        # trailing `and continue` directive asks resume to skip its Step 4 menu
+        # when the drift check is clean; resume strips it before
+        # binding the path.
         checks["resume_command"] = (
-            f"/context-window-manager:resume --context-file {_resume_abspath}"
+            f"/context-window-manager:resume --context-file {_resume_abspath} and continue"
         )
         # A short human-readable digest of the same capture, so the skill can
         # show what it recorded without re-parsing the block.

@@ -6,9 +6,9 @@ next reset time, weighting elapsed time by a configured active window (working
 hours minus blackout days) rather than raw wall-clock. Emits a projected finish
 percentage, a per-active-day burn-down rate, and a projected exhaustion date.
 
-Usage sources, in order: explicit --used/--reset > Anthropic usage API
-(direct-TUI path) > ccstatusline cache (--prefer-cache or API-unavailable
-fallback).
+Usage sources, in order: explicit --used/--reset > the statusline tap file
+(ccu_tap.py records Claude Code's rate_limits) > the newest ccstatusline
+usage*.json cache. ccu reads no credentials and makes no network call.
 """
 
 from __future__ import annotations
@@ -27,15 +27,15 @@ _LIB = Path(__file__).resolve().parent.parent / "lib"
 if str(_LIB) not in sys.path:
     sys.path.insert(0, str(_LIB))
 
-from config import (  # noqa: E402
+from config import (
     ConfigError,
     default_config,
     default_config_path,
     ensure_config_dir,
     load_config,
 )
-from forecast import forecast  # noqa: E402
-from usage_source import CACHE_FILE, Usage, resolve_source  # noqa: E402
+from forecast import forecast
+from usage_source import CACHE_DIR, Usage, resolve_source
 
 _MONTHS = {
     "jan": 1,
@@ -119,7 +119,7 @@ def assess(projected_pct: float) -> str:
 def _resolve_usage(args) -> tuple[float, str]:
     if args.used is not None and args.reset is not None:
         return float(args.used), args.reset
-    source = resolve_source(prefer_api=not args.prefer_cache, cache_file=CACHE_FILE)
+    source = resolve_source(cache_dir=CACHE_DIR)
     usage: Usage = source.read()
     used = float(args.used) if args.used is not None else usage.used_pct
     reset = args.reset if args.reset is not None else usage.reset_at_iso
@@ -143,7 +143,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument(
         "--prefer-cache",
         action="store_true",
-        help="Source usage from the ccstatusline cache instead of the API.",
+        help="Accepted for compatibility; no effect (tap file, then ccstatusline cache).",
     )
     args = p.parse_args(argv)
 
@@ -183,8 +183,13 @@ def main(argv: list[str] | None = None) -> int:
         used, reset_str = _resolve_usage(args)
     except (FileNotFoundError, OSError, ValueError) as e:
         print(
-            f"Error: could not resolve usage ({e}). Pass --used and --reset, "
-            "or --prefer-cache with a populated ccstatusline cache.",
+            f"Error: could not resolve usage ({e}). Add the ccu tap to "
+            "statusLine in ~/.claude/settings.json, either on its own:\n"
+            '  "command": "python3 <path>/ccu_tap.py"\n'
+            "or in front of an existing status line command:\n"
+            '  "command": "python3 <path>/ccu_tap.py -- '
+            '<your current statusLine command>"\n'
+            "Or pass --used and --reset.",
             file=sys.stderr,
         )
         return 1

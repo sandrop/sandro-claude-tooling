@@ -1,5 +1,47 @@
 # Changelog
 
+## 0.7.0 - 2026-11-12
+
+- **Breaking (library only):** removed `AnthropicUsageAPISource` and all OAuth,
+  Keychain and `.credentials.json` code. `resolve_source` now takes the
+  keyword-only arguments `tap_file` and `cache_dir`. The CLI surface is
+  unchanged, and `--prefer-cache` is still a no-op. To migrate library
+  callers: drop the `cfg`, `prefer_api` and `fetcher` arguments; replace
+  `cache_file=<path>` with `CcstatuslineCacheSource(<path>)`; and replace any
+  `AnthropicUsageAPISource` use with `resolve_source()` (tap file, then
+  ccstatusline cache) or `TapFileSource(<path>)` once `ccu_tap.py` is in
+  `statusLine`.
+- SCT-0080: new `cli/ccu_tap.py` reads Claude Code's statusline JSON on stdin
+  and records `rate_limits` to `~/.claude/.sct/ccu/usage.json`, with an
+  optional wrapped status line command after `--`. Writes are atomic, and
+  input without a valid `seven_day` window (`used_percentage` from 0 to 100,
+  numeric `resets_at`) or any file-recording failure keeps the previous file
+  and still forwards stdin. The reader rejects out-of-range or non-finite
+  percentages the same way.
+- Usage source order is now `--used`/`--reset`, then the tap file, then the
+  newest ccstatusline `usage*.json`. The tap's `resets_at` epoch seconds become
+  the ISO reset the forecast already uses.
+- With no source, the error shows both `statusLine` snippets for the tap.
+
+## 0.6.0 - 2026-11-11
+
+- **Breaking:** the CLI no longer reads the OAuth token or calls the Anthropic
+  usage API. Without `--used`/`--reset`, usage now comes only from the
+  ccstatusline cache, so a setup that relied on the API (no ccstatusline cache)
+  now fails with "could not resolve usage". To keep forecasting, run Claude
+  Code with ccstatusline as its status line so it populates
+  `~/.cache/ccstatusline/`, or pass both `--used` and `--reset` explicitly.
+  `--prefer-cache` is a no-op kept for compatibility. The API path is slated
+  for removal (SCT-0080).
+- SCT-0079: the cache source reads the newest `usage*.json` in
+  `~/.cache/ccstatusline/` (skipping `block-cache-*` and `.bak` files). Newer
+  ccstatusline writes `usage-<hash>.json`, so the fixed `usage.json` path went
+  stale and the forecast lost its number. `CACHE_FILE` is replaced by
+  `CACHE_DIR` and `newest_cache_file`.
+- In the now-unused API path, the macOS Keychain secret is parsed as
+  credentials JSON for `claudeAiOauth.accessToken`, and a 401 gets its own
+  token-safe notice.
+
 ## 0.5.0 - 2026-08-25
 
 - Removed the packaged `config/ccu.example.yaml` and the first-run seeding that

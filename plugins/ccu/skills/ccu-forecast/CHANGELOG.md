@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.4.0 - 2026-11-12
+
+- Ships with ccu 0.7.0 (SCT-0080): the precedence section names the statusline
+  tap file first, then the ccstatusline cache. The skill relays the CLI's tap
+  setup error and never edits `settings.json`.
+
+## 0.3.2 - 2026-11-11
+
+- Ships with ccu 0.6.0 (SCT-0079): usage comes from the newest ccstatusline
+  `usage*.json` by default, and ccu reads no credentials. Step 2 and the
+  precedence section drop the stale "API fetch is not wired yet" text.
+
 ## 0.3.1 - 2026-08-25
 
 - Doc consistency: step 1 no longer says the CLI seeds a starter

@@ -52,42 +52,82 @@ cd plugins/ccu
 # Explicit inputs (no usage source needed):
 python3 cli/ccu_forecast.py --used 56 --reset "2026-08-01T05:59:00Z"
 
-# Source usage from the ccstatusline cache:
-python3 cli/ccu_forecast.py --config myccu.yaml --prefer-cache
+# Source usage from the tap file, else the ccstatusline cache (the default):
+python3 cli/ccu_forecast.py --config myccu.yaml
 ```
 
 ### Usage sources (precedence)
 
 1. **Explicit** `--used` / `--reset` — always win.
-2. **Anthropic usage API** (direct-TUI path) — the default. Decoupled from
-   ccstatusline; see live verification below.
-3. **ccstatusline cache** (`~/.cache/ccstatusline/usage.json`) — used with
-   `--prefer-cache`, or automatically when the API path is unavailable.
+2. **Tap file**: `~/.claude/.sct/ccu/usage.json` (`$CLAUDE_CONFIG_DIR`-aware),
+   written by `cli/ccu_tap.py` on every status line render. See
+   [Status line tap](#status-line-tap).
+3. **ccstatusline cache**: the newest `~/.cache/ccstatusline/usage*.json`
+   (the legacy `usage.json` is still read), used only when no tap file exists.
 
-The `ccstatusline`-calls-this-script path still works: ccstatusline can invoke
-the CLI directly. Only the direct-TUI path is ccstatusline-independent.
+A tap file or cache older than 15 minutes prints a staleness warning that names
+the file. A stale tap file still wins over a fresh cache, so if you remove the
+tap from `statusLine`, the warning shows which file ccu read.
 
-## Live verification
+ccu reads no credentials and makes no network call. `--prefer-cache` is still
+accepted and changes nothing.
 
-The direct-API path is live: `usage_source._default_anthropic_fetcher` calls
-`GET https://api.anthropic.com/api/oauth/usage` with an `Authorization: Bearer
-<token>` header plus `anthropic-beta: oauth-2025-04-20` and a 5s timeout, and
-remaps the response's `seven_day` bucket (`utilization`, `resets_at`) into the
-seam's `weeklyUsage` / `weeklyResetAt` keys.
+### Status line tap
 
-The OAuth token resolves the same way ccstatusline does: on macOS the Keychain
-service `Claude Code-credentials` first, then `$CLAUDE_CONFIG_DIR/.credentials.json`
-(default `~/.claude/.credentials.json`); other platforms read the file only. No
-secrets are stored by this plugin. Log in to Claude Code, then smoke-test:
+Claude Code pipes a JSON object to the `statusLine` command on every render.
+For Claude.ai Pro and Max subscribers it carries
+`rate_limits.seven_day.used_percentage` (0-100) and `resets_at` (Unix epoch
+seconds), after the session's first API response. `ccu_tap.py` records that
+object as:
 
-```bash
-python3 cli/ccu_forecast.py --config myccu.yaml   # no --prefer-cache
+```json
+{"captured_at": 1763000000.0, "rate_limits": {"seven_day": {"used_percentage": 17.0, "resets_at": 1763500000}}}
 ```
 
-A live-sourced run prints a forecast with no ccstatusline stale-cache warning.
-When no token is available (or the endpoint is unreachable) the direct path
-falls back to the ccstatusline cache; use `--prefer-cache` or pass
-`--used`/`--reset` to source usage explicitly.
+The write is atomic. Bad input, a missing `seven_day` window, or an unwritable
+`.sct` dir leave the previous file in place, and the status line keeps working.
+
+Add the tap to `statusLine` in `~/.claude/settings.json` by hand. ccu never
+edits that file. With no other status line, the tap prints nothing:
+
+```json
+"statusLine": { "type": "command", "command": "python3 <path>/ccu_tap.py" }
+```
+
+To keep an existing status line, put the tap in front of it after `--`. The tap
+forwards stdin byte for byte and passes through the command's output and exit
+code:
+
+```json
+"statusLine": { "type": "command", "command": "python3 <path>/ccu_tap.py -- npx -y ccstatusline@latest" }
+```
+
+`<path>` is the plugin's `cli/` dir. For an installed plugin that is a
+versioned cache path (`~/.claude/plugins/cache/<marketplace>/ccu/<version>/cli`),
+so point the command at the new path after each ccu upgrade.
+
+#### As a ccstatusline widget
+
+If ccstatusline already owns your `statusLine`, you can leave `settings.json`
+alone and run the tap from a ccstatusline `custom-command` widget instead.
+ccstatusline pipes the same statusline JSON to the widget's command. Wrap the
+forecast so the widget records usage and shows the projected finish in one
+step. In `~/.config/ccstatusline/settings.json`:
+
+```json
+{
+  "type": "custom-command",
+  "commandPath": "python3 <path>/ccu_tap.py -- python3 <path>/ccu_forecast.py | awk '/Projected finish/{print $3}'"
+}
+```
+
+The tap writes the file before it runs the forecast, so the widget shows the
+number from the current render (for example `78.0%`).
+
+Do not wrap `npx -y ccstatusline@latest` (or any other ccstatusline command)
+inside a ccstatusline widget. ccstatusline would render the widget, the widget
+would run ccstatusline, and every render would start another nested render.
+Wrap ccstatusline only from Claude Code's `statusLine`, as shown above.
 
 ## Tests
 

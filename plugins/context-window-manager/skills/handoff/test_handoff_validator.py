@@ -149,12 +149,14 @@ def test_reports_resume_command_as_qualified_slash_paste(tmp_path):
     # The single paste line resume prints: just the slash command selecting the
     # handoff explicitly via --context-file. No cd prefix -- resume's own bootstrap
     # restores the recorded cwd from the context file, so prefixing cd here only
-    # duplicated that and added noise to the pasted prompt.
+    # duplicated that and added noise to the pasted prompt. The trailing
+    # `and continue` directive asks resume to skip its menu on a clean drift
+    # check.
     _init_repo(tmp_path)
     out = _run(str(tmp_path))
     resume_abspath = out["checks"]["resume_abspath"]
     assert out["checks"]["resume_command"] == (
-        f"/context-window-manager:resume --context-file {resume_abspath}"
+        f"/context-window-manager:resume --context-file {resume_abspath} and continue"
     )
 
 

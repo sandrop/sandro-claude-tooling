@@ -3,7 +3,6 @@
 import datetime as dt
 
 import pytest
-
 from config import ConfigError, load_config
 
 
@@ -24,20 +23,6 @@ def test_claude_root_strips_whitespace(monkeypatch, tmp_path):
     root = claude_root()
     assert root == tmp_path
     assert root.is_absolute()
-
-
-def test_claude_root_matches_usage_source_root(monkeypatch, tmp_path):
-    # config and usage_source must resolve the same .claude root for the same
-    # env value (they share one helper), so the config path and the credentials
-    # path cannot disagree -- including the whitespace-only edge.
-    from config import claude_root
-    from usage_source import _claude_config_dir
-
-    monkeypatch.setenv("CLAUDE_CONFIG_DIR", f"  {tmp_path}  ")
-    assert claude_root() == _claude_config_dir()
-
-    monkeypatch.setenv("CLAUDE_CONFIG_DIR", "   ")
-    assert claude_root() == _claude_config_dir()
 
 
 def test_ensure_config_dir_creates_without_seeding_idempotent(monkeypatch, tmp_path):
@@ -112,7 +97,7 @@ def test_load_config_rejects_zero_width_window(tmp_path):
 
 def test_load_config_strips_leading_bom(tmp_path):
     p = tmp_path / "ccu.yaml"
-    p.write_bytes("﻿timezone: America/New_York\n".encode("utf-8"))
+    p.write_bytes("﻿timezone: America/New_York\n".encode())
     cfg = load_config(p)
     assert str(cfg.tz) == "America/New_York"  # not silently defaulted to UTC
 
@@ -143,3 +128,10 @@ def test_load_config_rejects_blackout_range_end_before_start(tmp_path):
     p.write_text('blackouts:\n  - { start: "2026-08-17", end: "2026-08-10" }\n')
     with pytest.raises(ConfigError):
         load_config(p)
+
+
+def test_default_tap_file_respects_claude_config_dir(monkeypatch, tmp_path):
+    from config import default_tap_file
+
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path))
+    assert default_tap_file() == tmp_path / ".sct" / "ccu" / "usage.json"

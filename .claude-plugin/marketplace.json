@@ -12,7 +12,7 @@
       "name": "context-window-manager",
       "source": "./plugins/context-window-manager",
       "description": "Session context-window handoff and resume: save session state to a home-scoped, per-repo CONTEXT-*.md file and resume from it with git-drift and stale-reference checks.",
-      "version": "1.0.1",
+      "version": "1.3.0",
       "keywords": [
         "context-window",
         "session-handoff",
@@ -25,13 +25,46 @@
       "name": "ccu",
       "source": "./plugins/ccu",
       "description": "Forecast weekly Claude Code quota usage: project a finish percentage, per-active-day burn-down rate, and exhaustion date from current usage and the next reset, weighting elapsed time by configured active hours and blackout days.",
-      "version": "0.5.0",
+      "version": "0.7.0",
       "keywords": [
         "ccu",
         "claude-code-usage",
         "forecast",
         "quota",
         "claude-code"
+      ]
+    },
+    {
+      "name": "cobtask-workflow",
+      "source": {
+        "source": "github",
+        "repo": "sandrop/cobtask-workflow",
+        "ref": "main"
+      },
+      "description": "Deterministic, composable cobtask workflow for Claude Code: phase-sequenced task and project workflows with embedded checkbox state, configurable pause gates, and LAND/REVIEW stages.",
+      "version": "0.13.2",
+      "keywords": [
+        "cobtask",
+        "workflow",
+        "task-management",
+        "claude-code",
+        "plugin"
+      ]
+    },
+    {
+      "name": "cobtask-review",
+      "source": {
+        "source": "github",
+        "repo": "sandrop/cobtask-review",
+        "ref": "main"
+      },
+      "description": "Atomic, pass-by-pass code review for cobtask items: specialist, native and adversarial passes with results persisted to the task's Review section.",
+      "version": "2.0.0",
+      "keywords": [
+        "cobtask",
+        "code-review",
+        "claude-code",
+        "plugin"
       ]
     },
     {

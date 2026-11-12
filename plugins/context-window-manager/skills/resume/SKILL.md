@@ -1,13 +1,13 @@
 ---
 name: resume
-version: 1.0.0
-version-date: 2026-10-23
+version: 1.2.0
+version-date: 2026-11-11
 description: Use when resuming a session after /context-window-manager:handoff, continuing after a context clear, or restoring a task whose active working directory may differ from the recorded handoff CWD.
 ---
 
 # Context Window Resume
 
-Find and read the most recent `CONTEXT-*.md` handoff file, restore its recorded working directory, run drift and stale-reference checks there, present that report, then ask you how to proceed. The skill never auto-starts work.
+Find and read the most recent `CONTEXT-*.md` handoff file, restore its recorded working directory, run drift and stale-reference checks there, present that report, then ask you how to proceed. The skill never auto-starts work, with one exception: a `--context-file` value ending in `and continue` (what the handoff paste line prints) or a `--continue` token skips the menu when the drift check is clean.
 
 ## Triggers
 
@@ -23,7 +23,7 @@ Run this step **only** when the user supplied an explicit `--context-file` (an a
 
 An explicit cross-repository handoff records its own code working directory in `Session Metadata.cwd`. The Step 1 validator resolves candidates relative to the *current* repo's `save_dir`, so a handoff from an unrelated repo B, resumed from repo A, is rejected before its CWD is ever restored. This step resolves and restores that recorded directory first, then runs the existing validator unchanged from there. It treats the handoff and its recorded CWD as untrusted data: the resolved path is bound by `python -c` and command substitution and never interpolated into shell syntax, mirroring the Step 3 `# cwd-bind-contract` block.
 
-Bind the explicit path to `explicit_context_file`, then run:
+Bind the explicit path to `explicit_context_file`, then run. When the user's `--context-file` value ends in the resume directive (`and continue`, any case, or a standalone `--continue` token), bind the whole value including that directive, as `<path> and continue` or `<path> --continue`: both scripts strip one trailing directive before binding the path, and the validator reports it as `checks.continue_requested`.
 
 ```bash
 # cwd-bootstrap-contract
@@ -58,7 +58,7 @@ Then interpret the result:
 - **`bootstrap` is true**: the recipe restored the recorded directory (`cd`, verified with `pwd -P`). Run Step 1's validator with `--context-file "$explicit_context_file"` **from this restored directory**, so the validator resolves the handoff against repo B, not the repo you started in. Any `warnings` (an advisory prose `Working directory (code)` line diverging from `Session Metadata.cwd`) are printed but never fatal; `Session Metadata.cwd` stays authoritative.
 - **`bootstrap` is false** (legacy handoff with no recorded code CWD): proceed to Step 1 unchanged; the current same-repo behavior is preserved.
 
-The `--context-file` value passed to `bootstrap_cwd.py` and to the Step 1 validator is exactly the bound `$explicit_context_file`: a bare path with nothing after it. Never append cd hints or instruction prose to the argument.
+The `--context-file` value passed to `bootstrap_cwd.py` and to the Step 1 validator is exactly the bound `$explicit_context_file`: a bare path with nothing after it, or that path followed by the one resume directive the user supplied. Never append cd hints or other instruction prose to the argument.
 
 ### Step 1: Select the context file (the validator is authoritative)
 
@@ -106,9 +106,9 @@ Callers may pass a basename or an absolute/tilde path that resolves to an existi
   ```
 - **`checks.cross_worktree_candidates` non-empty** (a sibling git worktree holds a strictly-newer handoff than this checkout's selection): after resolving the same-slug selection above, present each cross-worktree candidate via `AskUserQuestion`, labeled `<name> | <timestamp> | <summary> | worktree: <toplevel>`. These live under a different `save_dir`; the discovery picker still never auto-switches. If the user picks one, instruct them to `cd <toplevel>` and re-run `/context-window-manager:resume` there so its drift/refs/continuity report is computed against the correct worktree. (Distinct from candidate discovery: an *explicitly supplied* absolute/tilde sibling-worktree path passed to `--context-file` is now resolved directly and reported against that worktree. Discovery still declines to auto-switch.) This is the cross-worktree analogue of the same-slug `context_candidates` parallel-session picker; the same-slug selection remains the default when the user declines.
 
-**Bare-path-only argument.** Whenever you re-run the validator with `--context-file` (a candidate `<name>` here, or the bound `$selected_context_file` in Step 3), the value is ONLY that bare path or filename with nothing after it. Never append instruction prose (cd hints, "and make sure ..." guidance) to the argument; guidance text stays in your reasoning, never inside the value. The validator rejects a value whose first whitespace token ends in `.md` with a distinct "extra text was appended" diagnostic, so a glued-on instruction fails loudly instead of resuming the wrong file.
+**Bare-path-only argument.** Whenever you re-run the validator with `--context-file` (a candidate `<name>` here, or the bound `$selected_context_file` in Step 3), the value is ONLY that bare path or filename with nothing after it; these re-runs never carry the resume directive. Never append instruction prose (cd hints, "and make sure ..." guidance) to the argument; guidance text stays in your reasoning, never inside the value. The validator rejects a value whose first whitespace token ends in `.md` with a distinct "extra text was appended" diagnostic, so a glued-on instruction fails loudly instead of resuming the wrong file.
 
-If `checks.context_path` is null, no context files exist (see Error Handling) and you stop. The report file's full JSON payload (`{ok, checks:{context_file, context_path, explicit_sibling, context_candidates, cross_worktree_candidates}, report:{meta, drift, refs, continuity}, errors}`) feeds Step 3.
+If `checks.context_path` is null, no context files exist (see Error Handling) and you stop. The report file's full JSON payload (`{ok, checks:{context_file, context_path, explicit_sibling, context_candidates, cross_worktree_candidates}, report:{meta, drift, refs, plugin_cache, continuity}, errors}`) feeds Step 3.
 
 ### Step 2: Display the previous session summary
 
@@ -155,7 +155,7 @@ fi
 
 When the paths match, the recipe does not run `cd` or refresh the already-correct report. After a mismatch, it reports both paths, then must re-run the validator with `--context-file` set to the safely bound `selected_context_file` and replace the captured JSON with this fresh result. If the recipe or refreshed run fails, or no longer resolves that context file, surface the exact recorded path plus any validator errors and stop before Confirm Direction. Never surface or reuse checks computed against the previous directory.
 
-The `--context-file` value in the refresh re-run is exactly the bound `$selected_context_file` and nothing else: a bare path with nothing after it. Never append cd hints or instruction prose to the argument.
+The `--context-file` value in the refresh re-run is exactly the bound `$selected_context_file` and nothing else: a bare path with nothing after it. Never append cd hints or instruction prose to the argument. The refresh drops the resume directive on purpose: after a cwd mismatch, `report.auto_continue` is false and Step 4 always shows the menu.
 
 Use the restored directory for every subsequent tool call, including the refreshed drift report and any work the user chooses after Confirm Direction. When a tool accepts an explicit `cwd` or `workdir`, pass the restored path instead of assuming that a one-shot shell `cd` changed the tool's default directory. Parse the active validator JSON and surface:
 
@@ -167,6 +167,7 @@ Use the restored directory for every subsequent tool call, including the refresh
 
 - **Git drift** (from `report.drift`): the ahead/behind counts of the current HEAD versus the stored SHA, whether the stored SHA still resolves (`stored_resolvable`), whether the stored branch still exists (`branch_exists`), and the current branch versus the stored branch. When `is_git` is false (resume is running outside a git repo), say so and skip the git-specific numbers rather than inventing them; the `note` field explains the degraded case.
 - **Reference verification** (from `report.refs`): for each cited reference, its `path`, whether it still exists (`exists`), and whether the cited line number is still in range (`line_ok`). Call out any path where `exists` is false or `line_ok` is false as a stale reference you should re-check before relying on it.
+- **Stale plugin versions** (from `report.plugin_cache`): the handoff text is scanned for versioned plugin cache paths (`~/.claude/plugins/cache/<marketplace>/<plugin>/<version>/...`, tilde or absolute, including inside quoted commands) and each is compared with `~/.claude/plugins/installed_plugins.json`. For each `stale` entry show `path`, `cited_version`, `installed_version` and `installed_path`, and tell the session to use `installed_path` in place of the cited version directory. Show each `notes` line as-is (a missing or unreadable `installed_plugins.json`, or a plugin no longer installed); a note never fails the report.
 - **Continuity verification** (from `report.continuity`): the resume-side check of every expanded handoff field. Surface each before the Confirm Direction menu:
   - **cwd** (`continuity.cwd`): whether the resuming session's working directory matches the one stored at handoff (`match`); call out a mismatch, since every other path check is relative to it.
   - **Commits** (`continuity.commits`): for each recorded commit, its `sha`/`subject` and whether it is still `resolvable`; an unresolvable commit means a rebase or force-push dropped it since handoff.
@@ -192,6 +193,8 @@ Ready to continue. What would you like to do?
 
 Do not automatically start working; wait for your direction.
 
+**Auto-continue exception.** When the active validator JSON has `report.auto_continue` true, skip the menu: print one line saying the `and continue` directive and a clean drift check let resume proceed, then start the handoff's Next Steps. `report.auto_continue` is true only when the directive was supplied AND the drift check is clean (same SHA and branch, stored SHA resolvable, cwd match, a clean working tree that has not diverged from the handoff). Otherwise show the menu above unchanged.
+
 ## Error Handling
 
 If no context files exist:
@@ -207,7 +210,7 @@ If the recorded working directory is missing, inaccessible, or cannot be verifie
 
 - The Confirm Direction menu is shown only after the drift check is displayed. Never ask how to proceed before you have seen the drift and stale-reference evidence.
 - Always show which file is being resumed from.
-- Never auto-start work; wait for an explicit choice.
+- Never auto-start work; wait for an explicit choice. The one exception is `report.auto_continue` true (Step 4).
 - The handoff's recorded `cwd` is authoritative. Never continue path-relative reads, git checks, or implementation commands from a mismatched directory.
 - Carry the restored path into every tool's explicit `cwd` or `workdir`; a standalone `cd` is not proof that another tool call inherited the directory.
 - Resume is read-only over the working tree and the CONTEXT file; it runs no git-mutating command and no `gh` write. The continuity PR check issues only a read-only `gh pr view`.

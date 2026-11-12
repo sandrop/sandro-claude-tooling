@@ -237,12 +237,12 @@ def test_scalar_unicode_line_separator_cannot_inject_a_fake_key_line():
 
 
 def test_context_filename_matches_collision_resistant_shape():
-    name = cs.context_filename(datetime(2026, 8, 8, 9, 0, 0))
+    name = cs.context_filename(datetime(2026, 8, 8, 9, 0, 0))  # noqa: DTZ001
     assert re.fullmatch(r"CONTEXT-2026-08-08-09-00-00-[0-9a-f]{6}\.md", name)
 
 
 def test_context_filename_is_collision_resistant_within_same_second():
-    now = datetime(2026, 8, 8, 9, 0, 0)
+    now = datetime(2026, 8, 8, 9, 0, 0)  # noqa: DTZ001
     a = cs.context_filename(now)
     b = cs.context_filename(now)
     assert a != b
@@ -279,3 +279,17 @@ def test_worktree_toplevels_lists_primary_and_linked(tmp_path):
 
 def test_worktree_toplevels_empty_outside_repo(tmp_path):
     assert cs.worktree_toplevels(tmp_path) == []
+
+
+def test_split_continue_directive_forms():
+    # One trailing `and continue` (any case, any spacing) or a
+    # `--continue` token is stripped; anything else passes through unchanged.
+    ctx = "/x/CONTEXT-a.md"
+    assert cs.split_continue_directive(f"{ctx} and continue") == (ctx, True)
+    assert cs.split_continue_directive(f"{ctx} AND  Continue") == (ctx, True)
+    assert cs.split_continue_directive(f"{ctx} --continue") == (ctx, True)
+    assert cs.split_continue_directive(ctx) == (ctx, False)
+    bare_dir = "/tmp/continue/CONTEXT-a.md"
+    assert cs.split_continue_directive(bare_dir) == (bare_dir, False)
+    trailing = f"{ctx} and continue please"
+    assert cs.split_continue_directive(trailing) == (trailing, False)

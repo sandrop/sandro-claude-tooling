@@ -112,8 +112,15 @@ def main(argv=None):
     }
     ap = argparse.ArgumentParser()
     ap.add_argument("--context-file", dest="context_file")
+    # The resume directive is accepted here only so the same argv
+    # parses; the validator owns what it means.
+    ap.add_argument("--continue", dest="continue_flag", action="store_true")
     try:
         args = ap.parse_args(argv)
+        if args.context_file:
+            args.context_file, _ = context_schema.split_continue_directive(
+                args.context_file
+            )
         if not args.context_file:
             out.update(
                 ok=False,

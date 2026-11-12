@@ -896,3 +896,134 @@ def test_cross_repo_explicit_handoff_rejected_before_cwd_restoration(tmp_path):
     assert out["ok"] is False
     assert out["checks"]["context_file"] is None
     assert any("registered sibling worktree" in e for e in out["errors"])
+
+
+def _plugin_cache_run(tmp_path, installed):
+    # A tmp HOME so installed_plugins.json resolves under it at call time.
+    home = tmp_path / "home"
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    if installed is not None:
+        p = home / ".claude" / "plugins" / "installed_plugins.json"
+        p.parent.mkdir(parents=True)
+        p.write_text(json.dumps({"version": 2, "plugins": installed}))
+    save_root = home / ".config" / "sct" / "context-window-manager"
+    save_dir = _save_dir(save_root, repo)
+    write_context(
+        save_dir,
+        "2026-11-10-09-00-00",
+        summary='Run `python3 "~/.claude/plugins/cache/m/p/0.66.0/bin/x" run`.',
+    )
+    return _run_cf(
+        repo, save_root, save_dir / "CONTEXT-2026-11-10-09-00-00.md", home=home
+    )
+
+
+def test_plugin_cache_report_present(tmp_path):
+    rec = {"scope": "user", "installPath": "/i/0.66.1", "version": "0.66.1"}
+    out = _plugin_cache_run(tmp_path, {"p@m": [rec]})
+
+    assert out["ok"] is True, out["errors"]
+    stale = out["report"]["plugin_cache"]["stale"]
+    assert [(s["cited_version"], s["installed_version"]) for s in stale] == [
+        ("0.66.0", "0.66.1")
+    ]
+
+
+def test_plugin_cache_missing_json_keeps_ok(tmp_path):
+    out = _plugin_cache_run(tmp_path, None)
+
+    assert out["ok"] is True, out["errors"]
+    assert out["report"]["plugin_cache"]["stale"] == []
+    assert len(out["report"]["plugin_cache"]["notes"]) == 1
+
+
+def test_continue_directive_binds_bare_path(tmp_save_dir, run_validator):
+    # The handoff paste line ends in ` and continue`; resume strips
+    # it before binding, so the same file resolves as for the bare path.
+    write_context(tmp_save_dir, "2026-08-08-09-00-00", summary="A")
+    ctx = tmp_save_dir / "CONTEXT-2026-08-08-09-00-00.md"
+    out = run_validator(args=["--context-file", f"{ctx} and continue"])
+    assert out["ok"] is True, out["errors"]
+    assert out["checks"]["context_path"] == str(ctx)
+    assert out["checks"]["continue_requested"] is True
+
+
+def test_continue_flag_two_token_form(tmp_save_dir, run_validator):
+    write_context(tmp_save_dir, "2026-08-08-09-00-00", summary="A")
+    ctx = tmp_save_dir / "CONTEXT-2026-08-08-09-00-00.md"
+    out = run_validator(args=["--context-file", str(ctx), "--continue"])
+    assert out["ok"] is True, out["errors"]
+    assert out["checks"]["context_path"] == str(ctx)
+    assert out["checks"]["continue_requested"] is True
+
+
+def test_no_directive_continue_requested_false(tmp_save_dir, run_validator):
+    write_context(tmp_save_dir, "2026-08-08-09-00-00", summary="A")
+    ctx = tmp_save_dir / "CONTEXT-2026-08-08-09-00-00.md"
+    out = run_validator(args=["--context-file", str(ctx)])
+    assert out["ok"] is True
+    assert out["checks"]["continue_requested"] is False
+
+
+def test_continue_directive_with_trailing_prose_still_rejected(
+    tmp_save_dir, run_validator
+):
+    # The directive must be trailing; other prose keeps the appended-text error.
+    write_context(tmp_save_dir, "2026-08-08-09-00-00", summary="A")
+    ctx = tmp_save_dir / "CONTEXT-2026-08-08-09-00-00.md"
+    out = run_validator(args=["--context-file", f"{ctx} and continue please"])
+    assert out["ok"] is False
+    assert out["checks"]["continue_requested"] is False
+
+
+def _clean_gate_inputs():
+    meta = {"git_branch": "feat-x"}
+    drift = {
+        "is_git": True,
+        "stored_resolvable": True,
+        "ahead": 0,
+        "behind": 0,
+        "current_branch": "feat-x",
+    }
+    continuity = {"cwd": {"match": True}, "working_tree": {"current": "clean"}}
+    return meta, drift, continuity
+
+
+@pytest.mark.parametrize(
+    "section,key,value",
+    [
+        ("drift", "ahead", 1),
+        ("drift", "behind", 1),
+        ("drift", "stored_resolvable", False),
+        ("drift", "current_branch", "other"),
+        ("drift", "is_git", False),
+        ("cwd", "match", False),
+        ("working_tree", "current", "dirty"),
+        ("working_tree", "current", None),
+        ("working_tree", "diverged", True),
+    ],
+)
+def test_auto_continue_ready_gate_fails_on_any_drift(section, key, value):
+    meta, drift, continuity = _clean_gate_inputs()
+    target = drift if section == "drift" else continuity[section]
+    target[key] = value
+    assert validator._auto_continue_ready(meta, drift, continuity) is False
+
+
+def test_auto_continue_ready_gate_passes_when_clean():
+    assert validator._auto_continue_ready(*_clean_gate_inputs()) is True
+
+
+def test_report_auto_continue_false_without_directive(tmp_path):
+    import session_capture
+
+    _init_repo(tmp_path)
+    save_root = tmp_path.parent / f"{tmp_path.name}-ac-sct"
+    d = _save_dir(save_root, tmp_path)
+    ctx = d / "CONTEXT-2026-08-08-11-00-00.md"
+    ctx.write_text(
+        context_schema.render_metadata_block(session_capture.collect_git(str(tmp_path)))
+    )
+    out = _run_cf(tmp_path, save_root, ctx)
+    assert out["report"]["auto_continue"] is False

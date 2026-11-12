@@ -13,6 +13,7 @@ sys.path.insert(0, str(COMMON))
 import context_schema
 import git_drift
 import verify_continuity
+import verify_plugin_cache
 import verify_refs
 
 # Fixed constant, no env override: simplicity-first.
@@ -136,6 +137,13 @@ def _parse_args(argv=None):
         "absolute or tilde path may resolve inside a registered sibling worktree's "
         "canonical save directory.",
     )
+    p.add_argument(
+        "--continue",
+        dest="continue_flag",
+        action="store_true",
+        help="Ask resume to skip the Step 4 menu when the drift check is clean; "
+        "same as ending the --context-file value with `and continue`.",
+    )
     return p.parse_args(argv)
 
 
@@ -226,6 +234,25 @@ def _resolve_recorded_sibling_cwd(
     return resolved, None
 
 
+def _auto_continue_ready(meta: dict, drift: dict, continuity: dict) -> bool:
+    """True only on a clean Step 3 drift check: same SHA, branch and
+    cwd as recorded, a clean working tree now, and no working-tree divergence
+    from the handoff. Neither tree check is enough alone: a tree dirty at
+    handoff and still dirty is not diverged, and handed-off dirty work that
+    was later stashed or discarded leaves a clean tree that has diverged."""
+    working_tree = continuity.get("working_tree", {})
+    return bool(
+        drift.get("is_git")
+        and drift.get("stored_resolvable")
+        and drift.get("ahead") == 0
+        and drift.get("behind") == 0
+        and drift.get("current_branch") == meta.get("git_branch")
+        and continuity.get("cwd", {}).get("match")
+        and working_tree.get("current") == "clean"
+        and not working_tree.get("diverged")
+    )
+
+
 def _cross_worktree_candidates(cwd: Path, primary_ts):
     """Newest handoff of each sibling worktree slug whose filename timestamp is
     strictly newer than the cwd-slug selection (primary_ts, or None when the
@@ -281,6 +308,7 @@ def main(argv=None):
         "explicit_sibling": False,
         "context_candidates": [],
         "cross_worktree_candidates": [],
+        "continue_requested": args.continue_flag,
     }
     report, errors = None, []
     try:
@@ -302,8 +330,14 @@ def main(argv=None):
         report_cwd = cwd
         explicit_sibling = False
         if args.context_file is not None:
+            # Strip one trailing `and continue` directive before
+            # binding, so the appended-text check only sees other prose.
+            context_arg, directive = context_schema.split_continue_directive(
+                args.context_file
+            )
+            checks["continue_requested"] = directive or args.continue_flag
             target, selection_root, explicit_sibling, error = _resolve_context_target(
-                args.context_file, cwd
+                context_arg, cwd
             )
             if error:
                 errors.append(error)
@@ -339,7 +373,14 @@ def main(argv=None):
                     "meta": meta,
                     "drift": drift,
                     "refs": refs,
+                    # Versioned plugin cache paths an upgrade superseded; scans the
+                    # full text because cited cache paths sit inside quoted commands.
+                    "plugin_cache": verify_plugin_cache.check_plugin_cache_refs(
+                        verify_plugin_cache.extract_plugin_cache_refs(text)
+                    ),
                     "continuity": continuity,
+                    "auto_continue": checks["continue_requested"]
+                    and _auto_continue_ready(meta, drift, continuity),
                 }
     except Exception as e:  # noqa: BLE001 - surface any failure via errors/ok
         errors.append(f"{type(e).__name__}: {e}")

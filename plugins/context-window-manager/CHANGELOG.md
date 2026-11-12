@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.3.0 - 2026-11-11
+
+- Handoff spawns the next session inside cmux: a new (or reused, when one with the target name is already in the group) sibling workspace that boots claude, renames itself, and receives the resume line. No config gives an incrementing `-N` name and an inherited sidebar color; optional `[[spawn.stages]]` (with an optional per-stage `sidebar` color for cmux) in `~/.config/sct/context-window-manager/config.toml` gives stage advance with colors. Opt out with `SCT_CWM_SPAWN=0`. Bump the plugin manifest and the marketplace catalog to 1.3.0. SCT-0078.
+
+## 1.2.0 - 2026-11-11
+
+- The handoff paste line ends in ` and continue`, and resume honors it (or a `--continue` token) by skipping its menu when the drift check is clean; any drift still shows the menu. Bump the plugin manifest and the marketplace catalog to 1.2.0. SCT-0077.
+
+## 1.1.1 - 2026-11-11
+
+- Resume's stale plugin cache check uses the simpler 0.9.1 scanner: the reported `path` is best-effort, and `$HOME/...` cache paths are now detected. Bump the plugin manifest and the marketplace catalog to 1.1.1. SCT-0075.
+
+## 1.1.0 - 2026-11-10
+
+- Resume flags versioned plugin cache paths a handoff cites when `~/.claude/plugins/installed_plugins.json` records a different version, and names the installed path to use (`report.plugin_cache`). Handoff tells the writer not to cite such paths. Bump the plugin manifest and the marketplace catalog to 1.1.0. SCT-0074.
+
 ## 1.0.1 - 2026-10-25
 
 - Docs: the `Skills to invoke on resume` example names `/cobtask-workflow:cobtask-tdd-plan` and `cobtask-workflow:cobtask-gitops ship` instead of the retired `/sp:tdd-plan` and `sp:git-commit-open-pr`. CCC-0387.

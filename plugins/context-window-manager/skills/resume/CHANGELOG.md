@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.2.0 - 2026-11-11
+
+- A `--context-file` value ending in `and continue` (any case, any spacing) or a `--continue` token now asks resume to skip the Step 4 menu. `bootstrap_cwd.py` and `validator.py` strip one trailing directive before binding the path, so other appended prose still gets the appended-text error. The validator reports `checks.continue_requested` and `report.auto_continue`, which is true only when the directive was supplied and the drift check is clean (same SHA and branch, stored SHA resolvable, cwd match, a clean working tree that has not diverged from the handoff). SCT-0077.
+
+## 1.1.0 - 2026-11-10
+
+- The validator report gains `report.plugin_cache` (`{stale, notes}`): every versioned plugin cache path the handoff cites whose version differs from `~/.claude/plugins/installed_plugins.json`, with the installed version and path to use instead. Resume shows these beside the stale references before Confirm Direction. A missing, unreadable or malformed `installed_plugins.json`, or an uninstalled plugin, becomes a note and never sets `ok` false. SCT-0074.
+
 ## 1.0.0 - 2026-10-23
 
 - Breaking: rename the skill from `context-window-resume` to `resume` (`/context-window-manager:resume`). The `SKILL.md` recipes call `${CLAUDE_PLUGIN_ROOT}/skills/resume/`, and the `mktemp` prefixes become `cwm-resume.XXXXXX` and `cwm-resume-bootstrap.XXXXXX`. The trigger bullet uses the qualified name, since a bare `/resume` collides with the built-in command. Handoffs whose `# Resume Command` line names the old skill still resume; `test_old_qualified_resume_line_still_accepted` locks that in. SCT-0070.
