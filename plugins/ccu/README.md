@@ -6,6 +6,20 @@ burn-down rate**, and a **projected exhaustion date**, weighting elapsed time by
 a configured active window (working hours minus blackout days) rather than raw
 wall-clock.
 
+## Install
+
+In Claude Code 2.1.275 or later:
+
+```text
+/plugin install ccu --marketplace sandrop/sandro-claude-tooling
+```
+
+Or from a shell, once the marketplace is added:
+
+```bash
+claude plugin install ccu@sandro-claude-tooling
+```
+
 ## Why active-window weighting
 
 Raw wall-clock projection assumes you burn quota evenly around the clock. You
@@ -87,11 +101,28 @@ object as:
 The write is atomic. Bad input, a missing `seven_day` window, or an unwritable
 `.sct` dir leave the previous file in place, and the status line keeps working.
 
+An installed plugin lives under a versioned cache path
+(`~/.claude/plugins/cache/<marketplace>/ccu/<version>/cli`), so a command that
+names that path keeps running the old version after an upgrade. Copy the
+launcher out of the cache once instead, where `<path>` is the installed
+plugin's `cli/` dir:
+
+```bash
+mkdir -p ~/.claude/.sct/ccu && cp <path>/ccu_launch.py ~/.claude/.sct/ccu/
+```
+
+`ccu_launch.py <script> [args...]` reads `~/.claude/plugins/installed_plugins.json`
+on each run, picks the newest ccu version recorded there (from either
+marketplace, the dev install winning a tie), and runs that version's
+`cli/<script>` with the same arguments and stdin. If no install resolves, it
+passes stdin to the command after `--`, or prints nothing, and the status line
+keeps working.
+
 Add the tap to `statusLine` in `~/.claude/settings.json` by hand. ccu never
 edits that file. With no other status line, the tap prints nothing:
 
 ```json
-"statusLine": { "type": "command", "command": "python3 <path>/ccu_tap.py" }
+"statusLine": { "type": "command", "command": "python3 ~/.claude/.sct/ccu/ccu_launch.py ccu_tap.py" }
 ```
 
 To keep an existing status line, put the tap in front of it after `--`. The tap
@@ -99,12 +130,8 @@ forwards stdin byte for byte and passes through the command's output and exit
 code:
 
 ```json
-"statusLine": { "type": "command", "command": "python3 <path>/ccu_tap.py -- npx -y ccstatusline@latest" }
+"statusLine": { "type": "command", "command": "python3 ~/.claude/.sct/ccu/ccu_launch.py ccu_tap.py -- npx -y ccstatusline@latest" }
 ```
-
-`<path>` is the plugin's `cli/` dir. For an installed plugin that is a
-versioned cache path (`~/.claude/plugins/cache/<marketplace>/ccu/<version>/cli`),
-so point the command at the new path after each ccu upgrade.
 
 #### As a ccstatusline widget
 
@@ -117,7 +144,7 @@ step. In `~/.config/ccstatusline/settings.json`:
 ```json
 {
   "type": "custom-command",
-  "commandPath": "python3 <path>/ccu_tap.py -- python3 <path>/ccu_forecast.py | awk '/Projected finish/{print $3}'"
+  "commandPath": "python3 ~/.claude/.sct/ccu/ccu_launch.py ccu_tap.py -- python3 ~/.claude/.sct/ccu/ccu_launch.py ccu_forecast.py | awk '/Projected finish/{print $3}'"
 }
 ```
 

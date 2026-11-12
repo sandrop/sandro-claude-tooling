@@ -185,9 +185,9 @@ def main(argv: list[str] | None = None) -> int:
         print(
             f"Error: could not resolve usage ({e}). Add the ccu tap to "
             "statusLine in ~/.claude/settings.json, either on its own:\n"
-            '  "command": "python3 <path>/ccu_tap.py"\n'
+            '  "command": "python3 ~/.claude/.sct/ccu/ccu_launch.py ccu_tap.py"\n'
             "or in front of an existing status line command:\n"
-            '  "command": "python3 <path>/ccu_tap.py -- '
+            '  "command": "python3 ~/.claude/.sct/ccu/ccu_launch.py ccu_tap.py -- '
             '<your current statusLine command>"\n'
             "Or pass --used and --reset.",
             file=sys.stderr,

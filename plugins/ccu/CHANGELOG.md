@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.8.0 - 2026-11-12
+
+- SCT-0083: new `cli/ccu_launch.py`, a stdlib-only launcher that names no ccu
+  version. It reads `~/.claude/plugins/installed_plugins.json`
+  (`$CLAUDE_CONFIG_DIR`-aware), picks the highest-version ccu install from
+  either marketplace whose `cli/<script>` exists (the dev install wins a tie),
+  and execs that script with the same arguments and stdin. When nothing
+  resolves, it forwards stdin to the command after `--` (if any), otherwise
+  prints nothing, and exits without breaking the status line.
+- One-time setup: copy the launcher to `~/.claude/.sct/ccu/ccu_launch.py` and
+  point `statusLine` or the ccstatusline widget at it. After that, a ccu
+  upgrade needs no settings edit.
+- The README gains an Install section with the marketplace install lines.
+
 ## 0.7.0 - 2026-11-12
 
 - **Breaking (library only):** removed `AnthropicUsageAPISource` and all OAuth,

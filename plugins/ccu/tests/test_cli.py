@@ -181,7 +181,7 @@ def test_main_no_source_error_explains_tap_setup(tmp_path, capsys, monkeypatch):
     rc = main(["--config", str(cfg)])
     err = capsys.readouterr().err
     assert rc == 1
-    assert '"command": "python3 <path>/ccu_tap.py"' in err
+    assert '"command": "python3 ~/.claude/.sct/ccu/ccu_launch.py ccu_tap.py"' in err
     assert "ccu_tap.py -- <your current statusLine command>" in err
 
 
