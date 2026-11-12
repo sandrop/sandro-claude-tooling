@@ -1,7 +1,7 @@
 ---
 name: handoff
-version: 1.2.0
-version-date: 2026-11-11
+version: 1.3.0
+version-date: 2026-11-12
 description: This skill should be used when you run "/context-window-manager:handoff", ask to "save the session", "hand off the context window", or want to clear and later resume the current session. Saves session state to ~/.config/sct/context-window-manager/<repo-slug>/CONTEXT-{timestamp}-{suffix}.md (a random suffix keeps two same-second parallel handoffs from colliding) including a Session Metadata block that records the git HEAD SHA and branch, the working directory, the working-tree and remote state, the commits made, the task and PR being worked, and any ADRs recorded, so resume can verify rather than guess.
 ---
 
@@ -39,7 +39,7 @@ Save to: `~/.config/sct/context-window-manager/<repo-slug>/<filename>`, where `<
    - `checks.filename` is the freshly generated collision-resistant `CONTEXT-*.md` name for this handoff.
    - `checks.is_git` / `checks.head_resolvable` report whether cwd is a git repo and whether HEAD resolves.
    - `checks.capture` is a human-readable digest of what was recorded (`working_tree`, `staged`, `unstaged`, `untracked`, `stash_count`, `commit_count`, `remote_upstream`, `remote_pushed`, `cobtask_id`, `pr_number`, `adr_count`) for surfacing in step 5.
-   - `checks.retention` is the once/day retention summary (`files_moved`, `dirs_moved`, or `skipped: already-pruned-today`): the pre-flight archives `CONTEXT-*.md` handoffs older than `SCT_CWM_RETENTION_DAYS` days (default 30) into the terminal `zArchives/` sibling under the save root, at most once per calendar day. A bad `SCT_CWM_RETENTION_DAYS` value surfaces loudly as `checks.retention_error` and never aborts the handoff. Move-only; nothing is ever deleted.
+   - `checks.retention` is the retention summary (`days`, `dirs_moved`). On every handoff the pre-flight moves each slug dir under the save root whose newest `CONTEXT-*.md` is at least N days old, whole, into `zArchives/YYYY-MM/<slug>/`, the month taken from that newest handoff. N comes from `[retention] days = N` in `~/.config/sct/context-window-manager/config.toml`, `SCT_CWM_RETENTION_DAYS` overrides it, and the default is 7. This session's own save dir is never moved. A bad value surfaces loudly as `checks.retention_error` and never aborts the handoff. Move-only; no handoff is ever deleted.
    - `metadata_block` is the finished, ready-to-append Session Metadata block.
 
    If `ok` is false, surface the captured errors verbatim and stop.
@@ -62,7 +62,7 @@ Save to: `~/.config/sct/context-window-manager/<repo-slug>/<filename>`, where `<
 
 4. **Append the Session Metadata block.** Append the `metadata_block` string from Step 1 to the end of the CONTEXT file, verbatim. Do not re-render it, reorder its keys, drop `n/a` lines, or edit any value. It is already complete and already helper-rendered; this block is exactly what the resume skill parses, so any hand-editing breaks the contract between the two skills.
 
-5. **Confirm and print the resume command.** Confirm the file was saved, show a one-line digest of what was captured (drawn from `checks.capture`), and display the single copy-pasteable resume line. If `checks.retention_error` is present, surface it verbatim to the user on its own line (e.g. `Retention skipped: <error>`) before the digest: the prune is non-blocking by design, so `ok` stays true and the handoff still succeeds, but a bad `SCT_CWM_RETENTION_DAYS` or a failed archive move must be shown, not swallowed. Do not abort the handoff for it.
+5. **Confirm and print the resume command.** Confirm the file was saved, show a one-line digest of what was captured (drawn from `checks.capture`), and display the single copy-pasteable resume line. If `checks.retention_error` is present, surface it verbatim to the user on its own line (e.g. `Retention skipped: <error>`) before the digest: the prune is non-blocking by design, so `ok` stays true and the handoff still succeeds, but a bad retention setting or a failed archive move must be shown, not swallowed. Do not abort the handoff for it.
    ```
    Context saved to: <checks.resume_abspath>
    Captured: branch <branch> @ <short-sha>, tree <working_tree> (<staged>/<unstaged>/<untracked>), <commit_count> commit(s), task <cobtask_id>, PR <pr_number>

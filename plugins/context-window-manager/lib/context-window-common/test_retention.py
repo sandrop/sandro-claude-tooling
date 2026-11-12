@@ -1,29 +1,65 @@
+import os
+import stat
+from datetime import datetime
 from pathlib import Path
 
 import pytest
 import retention
 
 
-def test_retention_days_default_when_unset():
-    assert retention.retention_days(env={}) == 30
+def _cfg(tmp_path, text):
+    p = tmp_path / "config.toml"
+    p.write_text(text)
+    return p
 
 
-def test_retention_days_reads_env():
-    assert retention.retention_days(env={"SCT_CWM_RETENTION_DAYS": "7"}) == 7
+def test_retention_days_default_is_7(tmp_path):
+    assert retention.retention_days(env={}, config_path=tmp_path / "x.toml") == 7
 
 
-def test_retention_days_rejects_non_int():
+def test_retention_days_reads_config(tmp_path):
+    cfg = _cfg(tmp_path, "[retention]\ndays = 10\n")
+    assert retention.retention_days(env={}, config_path=cfg) == 10
+
+
+def test_env_overrides_config(tmp_path):
+    cfg = _cfg(tmp_path, "[retention]\ndays = 10\n")
+    env = {"SCT_CWM_RETENTION_DAYS": "3"}
+    assert retention.retention_days(env=env, config_path=cfg) == 3
+
+
+@pytest.mark.parametrize("raw", ["0", "-3", "x", "soon"])
+def test_retention_days_rejects_bad_env(tmp_path, raw):
     with pytest.raises(retention.RetentionConfigError):
-        retention.retention_days(env={"SCT_CWM_RETENTION_DAYS": "soon"})
+        retention.retention_days(
+            env={"SCT_CWM_RETENTION_DAYS": raw}, config_path=tmp_path / "x.toml"
+        )
 
 
-def test_retention_days_rejects_zero_and_negative():
-    for bad in ("0", "-5"):
-        with pytest.raises(retention.RetentionConfigError):
-            retention.retention_days(env={"SCT_CWM_RETENTION_DAYS": bad})
+@pytest.mark.parametrize(
+    "text",
+    [
+        "[retention]\ndays = 0\n",
+        '[retention]\ndays = "3"\n',
+        "[retention]\ndays = true\n",
+        'retention = "3d"\n',
+        "[retention\ndays = \n",
+    ],
+)
+def test_retention_days_rejects_bad_config(tmp_path, text):
+    with pytest.raises(retention.RetentionConfigError):
+        retention.retention_days(env={}, config_path=_cfg(tmp_path, text))
 
 
-from datetime import datetime
+def test_spawn_only_config_uses_default(tmp_path):
+    cfg = _cfg(tmp_path, '[[spawn.stages]]\nsuffix = "A-plan"\n')
+    assert retention.retention_days(env={}, config_path=cfg) == 7
+
+
+def test_no_tomllib_ignores_config(tmp_path, monkeypatch):
+    monkeypatch.setattr(retention, "tomllib", None)
+    cfg = _cfg(tmp_path, "[retention]\ndays = 10\n")
+    assert retention.retention_days(env={}, config_path=cfg) == 7
 
 
 def test_parse_context_timestamp_from_name():
@@ -58,196 +94,398 @@ def test_file_age_falls_back_to_mtime_when_name_unparseable(tmp_path):
 NOW = datetime(2026, 9, 7, 12, 0, 0)  # noqa: DTZ001 - naive local clock under test
 
 
-def _mk(root, slug, ts):  # helper: create a CONTEXT file under a slug dir
+def _mk(
+    root, slug, ts, suffix="aaaaaa"
+):  # helper: create a CONTEXT file under a slug dir
     d = root / slug
     d.mkdir(parents=True, exist_ok=True)
-    f = d / f"CONTEXT-{ts}-aaaaaa.md"
+    f = d / f"CONTEXT-{ts}-{suffix}.md"
     f.write_text("x")
     return f
 
 
-def test_stale_file_moves_but_live_stays(tmp_path):
-    slug = "repo-deadbeef"
-    stale = _mk(tmp_path, slug, "2026-07-01-00-00-00")  # >30d
-    live = _mk(tmp_path, slug, "2026-09-06-00-00-00")  # <30d
-    retention.prune(tmp_path, now=NOW, days=30)
-    assert not stale.exists()
-    assert (tmp_path / "zArchives" / slug / stale.name).exists()
-    assert live.exists()  # untouched
-    assert (tmp_path / slug).is_dir()  # dir kept (has live file)
+def _arch(root, month, slug):
+    return root / "zArchives" / month / slug
 
 
-def test_dir_moves_when_all_files_stale(tmp_path):
-    slug = "old-cafef00d"
-    _mk(tmp_path, slug, "2026-06-01-00-00-00")
-    _mk(tmp_path, slug, "2026-06-02-00-00-00")
-    retention.prune(tmp_path, now=NOW, days=30)
-    assert not (tmp_path / slug).exists()
-    assert (tmp_path / "zArchives" / slug).is_dir()
-    assert len(list((tmp_path / "zArchives" / slug).glob("CONTEXT-*.md"))) == 2
+def test_stale_slug_dir_moves_whole_into_newest_month(tmp_path):
+    _mk(tmp_path, "r-1", "2026-07-30-00-00-00")
+    _mk(tmp_path, "r-1", "2026-08-02-00-00-00", suffix="bbbbbb")
+    (tmp_path / "r-1" / "notes.txt").write_text("kept with its dir")
+    out = retention.prune(tmp_path, NOW, 7)
+    assert out == {"days": 7, "dirs_moved": ["2026-08/r-1"]}
+    dest = _arch(tmp_path, "2026-08", "r-1")
+    assert sorted(p.name for p in dest.iterdir()) == [
+        "CONTEXT-2026-07-30-00-00-00-aaaaaa.md",
+        "CONTEXT-2026-08-02-00-00-00-bbbbbb.md",
+        "notes.txt",
+    ]
+    assert not (tmp_path / "r-1").exists()
+
+
+def test_one_fresh_handoff_keeps_the_whole_dir(tmp_path):
+    old = _mk(tmp_path, "r-1", "2026-06-01-00-00-00")
+    _mk(tmp_path, "r-1", "2026-09-06-00-00-00", suffix="bbbbbb")
+    out = retention.prune(tmp_path, NOW, 7)
+    assert out["dirs_moved"] == []
+    assert old.exists()
+    assert not (tmp_path / "zArchives").exists()
+
+
+def test_handoff_exactly_n_days_old_is_archived(tmp_path):
+    _mk(tmp_path, "r-1", "2026-08-31-12-00-00")  # NOW - 7 days exactly
+    assert retention.prune(tmp_path, NOW, 7)["dirs_moved"] == ["2026-08/r-1"]
+
+
+def test_unparseable_name_uses_mtime(tmp_path):
+    d = tmp_path / "r-1"
+    d.mkdir()
+    f = d / "CONTEXT-handwritten.md"
+    f.write_text("x")
+    old = datetime(2026, 5, 3, 0, 0, 0).timestamp()  # noqa: DTZ001
+    os.utime(f, (old, old))
+    assert retention.prune(tmp_path, NOW, 7)["dirs_moved"] == ["2026-05/r-1"]
+
+
+def test_dir_without_handoffs_is_left_alone(tmp_path):
+    (tmp_path / "empty-1").mkdir()
+    (tmp_path / "other-1").mkdir()
+    (tmp_path / "other-1" / "notes.txt").write_text("x")
+    assert retention.prune(tmp_path, NOW, 7)["dirs_moved"] == []
+    assert (tmp_path / "empty-1").is_dir() and (tmp_path / "other-1").is_dir()
 
 
 def test_zarchives_is_never_rescanned(tmp_path):
-    # a stale file already in zArchives must not move again / recurse
-    arch = tmp_path / "zArchives" / "x-1234"
+    arch = _arch(tmp_path, "2026-01", "r-1")
     arch.mkdir(parents=True)
     (arch / "CONTEXT-2026-01-01-00-00-00-aaaaaa.md").write_text("x")
-    summary = retention.prune(tmp_path, now=NOW, days=30)
-    assert summary["files_moved"] == []
-    assert summary["dirs_moved"] == []
+    assert retention.prune(tmp_path, NOW, 7)["dirs_moved"] == []
+    assert arch.is_dir()
 
 
 def test_dot_prefixed_slug_is_pruned(tmp_path):
-    # repo_slug for a dot-named repo toplevel (e.g. ~/.claude -> .claude-<hash>)
-    # is a legitimate dot-prefixed slug and must not be skipped by the walk.
-    slug = ".claude-deadbeef"
-    stale = _mk(tmp_path, slug, "2026-06-01-00-00-00")
-    summary = retention.prune(tmp_path, now=NOW, days=30)
-    assert not stale.exists()
-    assert (tmp_path / "zArchives" / slug).is_dir()
-    assert slug in summary["dirs_moved"]
-
-
-def test_all_stale_merges_into_existing_archive_dir(tmp_path):
-    # A prior day's file-level move already created zArchives/<slug>/. Today
-    # every remaining file is stale: a whole-dir move would collide with the
-    # existing dest and raise, so the stale files must merge in file-by-file.
-    slug = "repo-deadbeef"
-    prior = tmp_path / "zArchives" / slug
-    prior.mkdir(parents=True)
-    (prior / "CONTEXT-2026-05-01-00-00-00-aaaaaa.md").write_text("old")
-    now_stale = _mk(tmp_path, slug, "2026-07-01-00-00-00")  # >30d, still live-side
-    summary = retention.prune(tmp_path, now=NOW, days=30)
-    assert not now_stale.exists()
-    assert (prior / now_stale.name).exists()
-    assert now_stale.name in summary["files_moved"]
-    assert summary["dirs_moved"] == []
-    # The now-empty live slug dir is left in place (move-only; no rm).
-    assert list((tmp_path / slug).glob("CONTEXT-*.md")) == []
-
-
-import stat
+    _mk(tmp_path, ".claude-1234", "2026-06-01-00-00-00")
+    assert retention.prune(tmp_path, NOW, 7)["dirs_moved"] == ["2026-06/.claude-1234"]
 
 
 def test_archive_dirs_are_owner_only(tmp_path):
-    # Archived handoffs must be no more exposed than the live 0o700 slug dirs.
-    # File-merge path (a live file remains) creates zArchives/ and its slug dir.
-    slug = "repo-deadbeef"
-    _mk(tmp_path, slug, "2026-07-01-00-00-00")  # stale -> archived
-    _mk(tmp_path, slug, "2026-09-06-00-00-00")  # live -> slug dir stays
-    retention.prune(tmp_path, now=NOW, days=30)
-    archive_root = tmp_path / "zArchives"
-    dest = archive_root / slug
-    assert dest.is_dir()
-    assert stat.S_IMODE(dest.stat().st_mode) == 0o700
-    assert stat.S_IMODE(archive_root.stat().st_mode) == 0o700
+    _mk(tmp_path, "r-1", "2026-06-01-00-00-00")
+    (tmp_path / "r-1").chmod(0o755)  # e.g. a restored dir with a looser mode
+    old_umask = os.umask(0o022)
+    try:
+        retention.prune(tmp_path, NOW, 7)
+    finally:
+        os.umask(old_umask)
+    for d in (
+        tmp_path / "zArchives",
+        tmp_path / "zArchives" / "2026-06",
+        _arch(tmp_path, "2026-06", "r-1"),
+    ):
+        assert stat.S_IMODE(d.stat().st_mode) == 0o700
 
 
-def test_existing_archive_file_is_never_overwritten(tmp_path):
-    # A same-named file already in the archive (e.g. after a manual restore)
-    # must not be clobbered: move-only never deletes. The stale live file is
-    # archived under a distinct name, and the prior archived content survives.
-    slug = "repo-deadbeef"
-    prior = tmp_path / "zArchives" / slug
+def test_existing_month_archive_gets_dup_suffix(tmp_path):
+    prior = _arch(tmp_path, "2026-06", "r-1")
     prior.mkdir(parents=True)
-    name = "CONTEXT-2026-07-01-00-00-00-aaaaaa.md"
-    (prior / name).write_text("ORIGINAL")
-    # A live-side file with the SAME name is now stale and would collide.
-    live_dir = tmp_path / slug
-    live_dir.mkdir(parents=True)
-    (live_dir / name).write_text("NEWER")
-    summary = retention.prune(tmp_path, now=NOW, days=30)
-    assert (prior / name).read_text() == "ORIGINAL"  # untouched
-    archived = sorted(prior.glob("CONTEXT-*"))
-    assert len(archived) == 2  # both retained, nothing deleted
-    moved = summary["files_moved"]
-    assert moved and moved[0] != name  # collision-safe distinct name
-    assert (prior / moved[0]).read_text() == "NEWER"
-    assert not (live_dir / name).exists()  # source was moved, not left behind
+    (prior / "CONTEXT-2026-06-01-00-00-00-aaaaaa.md").write_text("first")
+    f = _mk(tmp_path, "r-1", "2026-06-01-00-00-00")  # same name, other payload
+    f.write_text("second")
+    assert retention.prune(tmp_path, NOW, 7)["dirs_moved"] == ["2026-06/r-1.dup1"]
+    assert (prior / f.name).read_text() == "first"
+    assert (_arch(tmp_path, "2026-06", "r-1.dup1") / f.name).read_text() == "second"
 
 
-def test_concurrent_prune_skips_already_moved_file(tmp_path, monkeypatch):
-    # Simulate a racing prune: the stale source vanishes between selection and
-    # move. The prune must skip it rather than raise (move-only => no loss).
-    slug = "repo-deadbeef"
-    stale = _mk(tmp_path, slug, "2026-07-01-00-00-00")
-    _mk(tmp_path, slug, "2026-09-06-00-00-00")  # live keeps the file-merge path
+def test_racing_prune_takes_next_suffix_without_clobbering(tmp_path, monkeypatch):
+    # Another prune claims r-1's month name between our exists() check and our
+    # rename. rename refuses a non-empty target, so we take .dup1 and both
+    # payloads survive.
+    f = _mk(tmp_path, "r-1", "2026-06-01-00-00-00")
+    f.write_text("ours")
+    real_rename = os.rename
 
-    real_move = retention.shutil.move
-    calls = {"n": 0}
+    def rename(src, dst):
+        dst = Path(dst)
+        if dst.name == "r-1" and not dst.exists():
+            dst.mkdir()
+            (dst / "theirs.md").write_text("theirs")
+        return real_rename(src, dst)
 
-    def racing_move(src, dst):
-        # First call: pretend a concurrent prune already moved the source.
-        if calls["n"] == 0 and Path(src) == stale:
-            calls["n"] += 1
-            Path(src).unlink()
-            raise FileNotFoundError(src)
-        return real_move(src, dst)
-
-    monkeypatch.setattr(retention.shutil, "move", racing_move)
-    # The lost-race source is removed before we call prune's move, so prune's
-    # own f.exists() guard skips it: no exception, empty move list for it.
-    summary = retention.prune(tmp_path, now=NOW, days=30)
-    assert stale.name not in summary["files_moved"]
+    monkeypatch.setattr(retention.os, "rename", rename)
+    assert retention.prune(tmp_path, NOW, 7)["dirs_moved"] == ["2026-06/r-1.dup1"]
+    assert (_arch(tmp_path, "2026-06", "r-1") / "theirs.md").read_text() == "theirs"
+    assert (_arch(tmp_path, "2026-06", "r-1.dup1") / f.name).read_text() == "ours"
 
 
-def test_keep_dir_is_never_relocated_wholesale(tmp_path):
-    # The active handoff dir, even when every handoff under it is stale and no
-    # prior archive exists, keeps its directory (the pending write's already
-    # reported target) while its stale files are still archived file-by-file.
-    slug = "active-deadbeef"
-    active = tmp_path / slug
-    s1 = _mk(tmp_path, slug, "2026-06-01-00-00-00")
-    s2 = _mk(tmp_path, slug, "2026-06-02-00-00-00")
-    summary = retention.prune(tmp_path, now=NOW, days=30, keep_dir=active)
-    assert active.is_dir()  # dir preserved, not moved wholesale
-    assert summary["dirs_moved"] == []
-    assert set(summary["files_moved"]) == {s1.name, s2.name}
-    assert not s1.exists() and not s2.exists()
-    arch = tmp_path / "zArchives" / slug
-    assert (arch / s1.name).exists() and (arch / s2.name).exists()
+def test_concurrent_prune_skips_already_moved_dir(tmp_path, monkeypatch):
+    _mk(tmp_path, "r-1", "2026-06-01-00-00-00")
+    real_rename = os.rename
+
+    def rename(src, dst):
+        real_rename(src, tmp_path / "zArchives" / "2026-06" / "r-1")  # the other prune
+        return real_rename(src, dst)
+
+    monkeypatch.setattr(retention.os, "rename", rename)
+    assert retention.prune(tmp_path, NOW, 7)["dirs_moved"] == []
+    assert _arch(tmp_path, "2026-06", "r-1").is_dir()
 
 
-def test_non_keep_dir_still_moves_wholesale(tmp_path):
-    # A different all-stale slug (not the active dir) still relocates wholesale.
-    active = tmp_path / "active-1111"
-    active.mkdir()
-    other = "other-2222"
-    _mk(tmp_path, other, "2026-06-01-00-00-00")
-    summary = retention.prune(tmp_path, now=NOW, days=30, keep_dir=active)
-    assert not (tmp_path / other).exists()
-    assert other in summary["dirs_moved"]
+def test_keep_dir_is_never_moved(tmp_path):
+    f = _mk(tmp_path, "r-1", "2026-06-01-00-00-00")
+    out = retention.prune(tmp_path, NOW, 7, keep_dir=tmp_path / "r-1")
+    assert out["dirs_moved"] == []
+    assert f.exists()
 
 
-from datetime import date
+def test_maybe_prune_runs_on_every_call(tmp_path):
+    (tmp_path / ".last_prune").write_text(f"{datetime.now():%Y-%m-%d}")  # noqa: DTZ005 - a legacy marker is ignored
+    _mk(tmp_path, "r-1", "2026-01-01-00-00-00")
+    assert retention.maybe_prune(tmp_path, env={})["dirs_moved"] == ["2026-01/r-1"]
+    _mk(tmp_path, "r-2", "2026-01-02-00-00-00")
+    assert retention.maybe_prune(tmp_path, env={})["dirs_moved"] == ["2026-01/r-2"]
 
 
-def test_maybe_prune_runs_first_time_and_stamps_marker(tmp_path):
-    _mk(tmp_path, "r-1111", "2026-06-01-00-00-00")
-    out = retention.maybe_prune(tmp_path, today=date(2026, 9, 7), env={})
-    assert "skipped" not in out
-    marker = tmp_path / ".last_prune"
-    assert marker.read_text().strip() == "2026-09-07"
+def test_maybe_prune_reads_days_from_config(tmp_path):
+    from datetime import timedelta
+
+    (tmp_path / "config.toml").write_text("[retention]\ndays = 30\n")
+    now = datetime.now()  # noqa: DTZ005 - maybe_prune reads the naive local clock
+    _mk(tmp_path, "r-1", f"{now - timedelta(days=20):%Y-%m-%d-%H-%M-%S}")
+    out = retention.maybe_prune(tmp_path, env={})
+    assert out == {"days": 30, "dirs_moved": []}
 
 
-def test_maybe_prune_skips_when_already_pruned_today(tmp_path):
-    (tmp_path / ".last_prune").write_text("2026-09-07")
-    stale = _mk(tmp_path, "r-2222", "2026-06-01-00-00-00")
-    out = retention.maybe_prune(tmp_path, today=date(2026, 9, 7), env={})
-    assert out["skipped"] == "already-pruned-today"
-    assert stale.exists()  # gate prevented the walk
-
-
-def test_maybe_prune_runs_again_next_day(tmp_path):
-    (tmp_path / ".last_prune").write_text("2026-09-06")
-    stale = _mk(tmp_path, "r-3333", "2026-06-01-00-00-00")
-    out = retention.maybe_prune(tmp_path, today=date(2026, 9, 7), env={})
-    assert "skipped" not in out
-    assert not stale.exists()
+def test_maybe_prune_notes_skipped_config_without_tomllib(tmp_path, monkeypatch):
+    monkeypatch.setattr(retention, "tomllib", None)
+    (tmp_path / "config.toml").write_text("[retention]\ndays = 1\n")
+    out = retention.maybe_prune(tmp_path, env={})
+    assert out["days"] == 7
+    assert "config_note" in out
 
 
 def test_maybe_prune_propagates_config_error(tmp_path):
     with pytest.raises(retention.RetentionConfigError):
-        retention.maybe_prune(
-            tmp_path, today=date(2026, 9, 7), env={"SCT_CWM_RETENTION_DAYS": "nope"}
-        )
+        retention.maybe_prune(tmp_path, env={"SCT_CWM_RETENTION_DAYS": "0"})
+
+
+def _legacy(root, slug, *stamps):
+    d = root / "zArchives" / slug
+    d.mkdir(parents=True, exist_ok=True)
+    files = []
+    for ts in stamps:
+        f = d / f"CONTEXT-{ts}-aaaaaa.md"
+        f.write_text(ts)
+        files.append(f)
+    return files
+
+
+def test_migrate_dry_run_moves_nothing(tmp_path):
+    files = _legacy(tmp_path, "slugA", "2026-07-01-00-00-00", "2026-08-01-00-00-00")
+    out = retention.migrate_archive(tmp_path)
+    assert out["apply"] is False
+    assert len(out["planned"]) == 2
+    assert out["moved"] == []
+    assert all(f.exists() for f in files)
+    assert not (tmp_path / "zArchives" / "2026-07").exists()
+
+
+def test_migrate_dry_run_reserves_planned_destinations(tmp_path):
+    # A legacy original and its .dup1 variant both map to July, and the dated
+    # archive already holds the original. The preview must plan distinct
+    # destinations, move nothing, and match what apply then does.
+    legacy = tmp_path / "zArchives" / "slugA"
+    legacy.mkdir(parents=True)
+    name = "CONTEXT-2026-07-01-00-00-00-aaaaaa.md"
+    dup1 = "CONTEXT-2026-07-01-00-00-00-aaaaaa.dup1.md"
+    dup2 = "CONTEXT-2026-07-01-00-00-00-aaaaaa.dup2.md"
+    (legacy / name).write_text("legacy")
+    (legacy / dup1).write_text("legacy dup")
+    july = datetime(2026, 7, 1, 0, 0, 0).timestamp()  # noqa: DTZ001
+    os.utime(legacy / dup1, (july, july))  # unparseable name: month from mtime
+    dated = _arch(tmp_path, "2026-07", "slugA")
+    dated.mkdir(parents=True)
+    (dated / name).write_text("ORIGINAL")
+    preview = retention.migrate_archive(tmp_path)
+    assert preview["planned"] == [
+        [f"slugA/{dup1}", f"2026-07/slugA/{dup1}"],
+        [f"slugA/{name}", f"2026-07/slugA/{dup2}"],
+    ]
+    assert sorted(p.name for p in dated.iterdir()) == [name]
+    assert (legacy / name).exists() and (legacy / dup1).exists()
+    applied = retention.migrate_archive(tmp_path, apply=True)
+    assert applied["moved"] == preview["planned"]
+    assert (dated / name).read_text() == "ORIGINAL"
+    assert (dated / dup1).read_text() == "legacy dup"
+    assert (dated / dup2).read_text() == "legacy"
+
+
+def test_competing_archivers_claim_distinct_destinations(tmp_path, monkeypatch):
+    # A rival archiver (a live prune of a restored copy) races the migration
+    # for the same dated name after the migration picked it but before its
+    # move. Each claims its name atomically, so the rival takes .dup1 and both
+    # payloads survive; a check-then-move would let the later move clobber.
+    (src,) = _legacy(tmp_path, "slugA", "2026-07-01-00-00-00")
+    rival_dir = tmp_path / "rival"
+    rival_dir.mkdir()
+    rival = rival_dir / src.name
+    rival.write_text("RIVAL")
+    real_move = retention.shutil.move
+    state = {"busy": False, "rival": None}
+
+    def move(s, d):
+        if not state["busy"]:
+            state["busy"] = True
+            state["rival"] = retention._archive(rival, tmp_path / "zArchives", "slugA")
+        return real_move(s, d)
+
+    monkeypatch.setattr(retention.shutil, "move", move)
+    out = retention.migrate_archive(tmp_path, apply=True)
+    dest = _arch(tmp_path, "2026-07", "slugA")
+    assert out["moved"] == [[f"slugA/{src.name}", f"2026-07/slugA/{src.name}"]]
+    assert state["rival"] == dest / "CONTEXT-2026-07-01-00-00-00-aaaaaa.dup1.md"
+    assert (dest / src.name).read_text() == "2026-07-01-00-00-00"
+    assert state["rival"].read_text() == "RIVAL"
+
+
+def test_migrate_apply_moves_into_month_dirs(tmp_path):
+    jul, aug = _legacy(tmp_path, "slugA", "2026-07-01-00-00-00", "2026-08-01-00-00-00")
+    out = retention.migrate_archive(tmp_path, apply=True)
+    assert out["apply"] is True
+    assert (_arch(tmp_path, "2026-07", "slugA") / jul.name).read_text() == (
+        "2026-07-01-00-00-00"
+    )
+    assert (_arch(tmp_path, "2026-08", "slugA") / aug.name).exists()
+    assert not (tmp_path / "zArchives" / "slugA").exists()
+    assert out["dirs_emptied"] == ["slugA"]
+    for d in (tmp_path / "zArchives" / "2026-07", _arch(tmp_path, "2026-07", "slugA")):
+        assert stat.S_IMODE(d.stat().st_mode) == 0o700
+
+
+def test_migrate_skips_existing_month_dirs(tmp_path):
+    dated = _arch(tmp_path, "2026-09", "slugB")
+    dated.mkdir(parents=True)
+    f = dated / "CONTEXT-2026-09-01-00-00-00-aaaaaa.md"
+    f.write_text("x")
+    out = retention.migrate_archive(tmp_path, apply=True)
+    assert out["planned"] == []
+    assert f.exists()
+
+
+def test_migrate_collision_gets_dup_suffix(tmp_path):
+    (src,) = _legacy(tmp_path, "slugA", "2026-07-01-00-00-00")
+    dest = _arch(tmp_path, "2026-07", "slugA")
+    dest.mkdir(parents=True)
+    (dest / src.name).write_text("ORIGINAL")
+    retention.migrate_archive(tmp_path, apply=True)
+    assert (dest / src.name).read_text() == "ORIGINAL"
+    assert (dest / "CONTEXT-2026-07-01-00-00-00-aaaaaa.dup1.md").read_text() == (
+        "2026-07-01-00-00-00"
+    )
+
+
+def test_migrate_failed_move_releases_empty_reservation(tmp_path, monkeypatch):
+    # The move fails before any content lands (e.g. PermissionError on both the
+    # rename and the copy fallback). The error propagates, the source stays,
+    # and the empty placeholder is removed so no hollow CONTEXT-*.md remains.
+    (src,) = _legacy(tmp_path, "slugA", "2026-07-01-00-00-00")
+
+    def move(s, d):
+        raise PermissionError(s)
+
+    monkeypatch.setattr(retention.shutil, "move", move)
+    with pytest.raises(PermissionError):
+        retention.migrate_archive(tmp_path, apply=True)
+    assert src.read_text() == "2026-07-01-00-00-00"
+    assert list(_arch(tmp_path, "2026-07", "slugA").iterdir()) == []
+
+
+def test_migrate_failed_move_keeps_transferred_content(tmp_path, monkeypatch):
+    # shutil.move can fall back to copy-then-delete. If the copy lands and the
+    # source delete then fails, the transferred handoff must survive cleanup.
+    (src,) = _legacy(tmp_path, "slugA", "2026-07-01-00-00-00")
+
+    def move(s, d):
+        Path(d).write_text(Path(s).read_text())  # the copy landed
+        raise PermissionError(s)  # but removing the source failed
+
+    monkeypatch.setattr(retention.shutil, "move", move)
+    with pytest.raises(PermissionError):
+        retention.migrate_archive(tmp_path, apply=True)
+    dest = _arch(tmp_path, "2026-07", "slugA") / src.name
+    assert dest.read_text() == "2026-07-01-00-00-00"
+    assert src.exists()
+
+
+def test_migrate_skips_source_moved_by_another_run(tmp_path, monkeypatch):
+    # The source vanishes between selection and move (another run took it).
+    # Migration skips it, reports no move, and releases its placeholder.
+    _legacy(tmp_path, "slugA", "2026-07-01-00-00-00")
+    elsewhere = tmp_path / "elsewhere.md"
+    real_move = retention.shutil.move
+
+    def move(s, d):
+        real_move(s, str(elsewhere))  # the other run
+        raise FileNotFoundError(s)
+
+    monkeypatch.setattr(retention.shutil, "move", move)
+    out = retention.migrate_archive(tmp_path, apply=True)
+    assert out["moved"] == []
+    assert elsewhere.read_text() == "2026-07-01-00-00-00"
+    assert list(_arch(tmp_path, "2026-07", "slugA").iterdir()) == []
+
+
+def test_migrate_leaves_non_context_files(tmp_path):
+    _legacy(tmp_path, "slugA", "2026-07-01-00-00-00")
+    legacy = tmp_path / "zArchives" / "slugA"
+    (legacy / "notes.txt").write_text("keep")
+    (legacy / "nested").mkdir()
+    out = retention.migrate_archive(tmp_path, apply=True)
+    assert sorted(out["left"]) == ["slugA/nested", "slugA/notes.txt"]
+    assert (legacy / "notes.txt").exists()
+    assert out["dirs_emptied"] == []
+
+
+def test_migrate_is_idempotent(tmp_path):
+    _legacy(tmp_path, "slugA", "2026-07-01-00-00-00", "2026-08-01-00-00-00")
+    retention.migrate_archive(tmp_path, apply=True)
+    again = retention.migrate_archive(tmp_path, apply=True)
+    assert again["planned"] == [] and again["moved"] == []
+
+
+def test_migrate_without_archive_is_empty(tmp_path):
+    out = retention.migrate_archive(tmp_path)
+    assert out["planned"] == [] and out["left"] == []
+
+
+def test_migrate_cli_dry_run_by_default(tmp_path):
+    import json
+    import os
+    import subprocess
+    import sys
+
+    save_root = tmp_path / ".config" / "sct" / "context-window-manager"
+    (f,) = _legacy(save_root, "slugA", "2026-07-01-00-00-00")
+    env = {k: v for k, v in os.environ.items() if k != "CWM_SAVE_ROOT"}
+    env["HOME"] = str(tmp_path)
+    proc = subprocess.run(
+        [sys.executable, "-I", retention.__file__, "migrate"],
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert proc.returncode == 0, proc.stderr
+    out = json.loads(proc.stdout)
+    assert out["apply"] is False
+    assert len(out["planned"]) == 1
+    assert f.exists()
+
+
+def test_maybe_prune_default_keeps_last_7_days(tmp_path):
+    from datetime import timedelta
+
+    now = datetime.now()  # noqa: DTZ005 - maybe_prune reads the naive local clock
+    _mk(tmp_path, "old-1", f"{now - timedelta(days=8):%Y-%m-%d-%H-%M-%S}")
+    recent = _mk(tmp_path, "new-1", f"{now - timedelta(days=6):%Y-%m-%d-%H-%M-%S}")
+    out = retention.maybe_prune(tmp_path, env={})
+    assert [m.split("/")[1] for m in out["dirs_moved"]] == ["old-1"]
+    assert recent.exists()

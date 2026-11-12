@@ -1,7 +1,7 @@
 ---
 name: context-window-common
-version: 0.10.0
-version-date: 2026-11-11
+version: 0.11.0
+version-date: 2026-11-12
 description: Shared library for the handoff and resume skills. Not user-invocable; carries no slash command. Houses context_schema.py (the SessionMetadata schema plus CONTEXT-*.md Session Metadata block render/parse and the collision-resistant filename generator), session_capture.py (read-only git, task, PR, and ADR probes that populate a SessionMetadata), git_drift.py (stored-SHA vs current-HEAD ahead/behind + branch-exists, degrades when not a git repo), and verify_refs.py (extract backticked path refs from handoff text and stat them against the working tree). Bumps independently of its consumers.
 ---
 
@@ -17,7 +17,16 @@ Shared library for the context-window family. There is no `/context-window-commo
 - `verify_refs.py`: `extract_refs(text)` pulls backticked path references out of the handoff prose; `verify_refs(refs, cwd)` stats each one against the working tree and reports whether the path still exists and whether any cited line number is still in range. This is how the resume skill flags stale references before you choose a direction.
 - `verify_continuity.py`: `verify_continuity(meta, cwd, gh_runner=None)` is the resume-side verification of the expanded handoff fields, consuming the `parse_metadata_block` dict. It reports cwd match, cobtask/TDD-plan/ADR path existence, the PR's re-queried `current_state` (read-only `gh pr view`, injectable runner so tests never shell out), commit resolvability and working-tree divergence (reusing `git_drift` and `session_capture.collect_git`), and a recomputed remote ahead/behind. Every probe degrades to a structured note rather than raising, so a missing `gh`, an offline network, or a deleted PR/branch/upstream never crashes resume. The resume skill folds this into its single `report.continuity`.
 
-- `retention.py`: once/day archival of stale `CONTEXT-*.md` handoffs. `retention_days(env=None)` resolves the retention window from `SCT_CWM_RETENTION_DAYS` (default 30) and raises `RetentionConfigError` on a non-int or `< 1` value, so a bad config fails loud instead of silently disabling pruning. `parse_context_timestamp(name)` reads the `CONTEXT-<YYYY-MM-DD-HH-MM-SS>` filename as the authoritative age clock; `file_age_days(path, now)` falls back to mtime only when the name is unparseable. `prune(save_root, now, days)` moves `CONTEXT-*.md` files older than `days` into the terminal `zArchives/<slug>/` sibling under `SAVE_ROOT` using `shutil.move` (never a delete, honoring the `rm` ban), relocating a whole per-repo-slug dir only when every handoff under it is stale and merging file-by-file when a prior archive dir already exists; it never scans `zArchives/`, so archived files are never re-processed. `maybe_prune(save_root, today, env=None)` gates the walk to at most once per calendar day via a `.last_prune` marker at the save root, and propagates config errors before touching the filesystem. `zArchives/` is terminal: nothing under it is ever auto-deleted or re-pruned. Consumed by the handoff pre-flight validator.
+- `retention.py`: archival of stale per-repo-slug handoff dirs into `zArchives/YYYY-MM/<slug>/`. `retention_days(env=None, config_path=None)` returns N from `SCT_CWM_RETENTION_DAYS` first, then `[retention] days` in `config_path`, else 7. A bad value raises `RetentionConfigError`, so a bad config fails loud instead of silently disabling pruning; on a Python without `tomllib` the file is skipped. `parse_context_timestamp(name)` reads the `CONTEXT-<YYYY-MM-DD-HH-MM-SS>` filename as the authoritative clock, and `file_timestamp(path)` falls back to mtime only when the name is unparseable. `prune(save_root, now, days, keep_dir=None)` moves each slug dir whose newest `CONTEXT-*.md` is at least `days` old, whole, with one `os.rename` into the month of that newest handoff (`<slug>.dupN` when an earlier archive holds the name). It never moves `keep_dir`, never moves a single file, never removes a dir, keeps every archive dir 0o700, never scans `zArchives/`, and returns `{"days", "dirs_moved"}`. `maybe_prune(save_root, env=None, keep_dir=None)` reads `save_root/config.toml` and prunes on every call, propagating config errors before touching the filesystem. `migrate_archive(save_root, apply=False)` moves the legacy `zArchives/<slug>/` tree into the dated layout. Consumed by the handoff pre-flight validator.
+
+  Example `~/.config/sct/context-window-manager/config.toml` section:
+
+  ```toml
+  [retention]
+  days = 14
+  ```
+
+  One-time migration of the old layout: `python3 lib/context-window-common/retention.py migrate` prints the plan, and `--apply` moves the files.
 
 Each module has a sibling `test_*.py`. The library is imported by the two sibling skills via a `sys.path` insert into this directory, so the consumers always call the live helper rather than a copied snapshot.
 

@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.3.0 - 2026-11-12
+
+- `checks.retention` now reports `days` and `dirs_moved`. The pre-flight runs on every handoff and moves each slug dir whose newest handoff is at least N days old, whole, into `zArchives/YYYY-MM/<slug>/`. N comes from `[retention] days` in config.toml or `SCT_CWM_RETENTION_DAYS`; the default drops from 30 days to 7. SCT-0081.
+
 ## 1.2.0 - 2026-11-11
 
 - New Step 6: inside cmux, handoff runs `spawn.py` to open the next workspace right after the current one in its group, boot claude with the caller's `--model` and `--effort`, `/rename` it, and send the resume line so the new session continues with no menu. A same-named workspace already in the group is reused and gets only the resume line. With no config the name gets an incrementing `-N` suffix and inherits the sidebar color; an optional `[[spawn.stages]]` list (`suffix`, `color`, optional `sidebar` for a cmux sidebar color such as `#7D6608`, since cmux has no `yellow`) in `~/.config/sct/context-window-manager/config.toml` switches to stage advance with `/color`, and asks when no stage matches. Opt out with `SCT_CWM_SPAWN=0`; outside cmux or on any cmux failure the spawn is skipped with a reason and the handoff still succeeds. SCT-0078.

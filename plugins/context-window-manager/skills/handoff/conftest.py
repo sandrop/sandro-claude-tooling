@@ -29,6 +29,7 @@ def run_handoff_validator():
     CWM_SAVE_ROOT redirected, returning the parsed JSON stdout. Mirrors
     resume/conftest.py's run_validator: the subprocess boundary
     is deliberate, since the handoff skill invokes its validator that way.
+    A non-zero exit fails the calling test with the validator's stderr.
 
     - cwd: working directory the validator runs in (its own save_dir derives
       from this). Defaults to a required caller-supplied path.
@@ -39,8 +40,8 @@ def run_handoff_validator():
 
     def _run(cwd, save_root, extra_env=None, args=None) -> dict:
         env = {**os.environ, "CWM_SAVE_ROOT": str(save_root)}
-        # Hermetic: ignore any SCT_CWM_RETENTION_DAYS the developer exported, so
-        # the prune tests do not depend on local config. A test that wants a
+        # Hermetic: ignore any retention vars the developer exported, so the
+        # prune tests do not depend on local config. A test that wants a
         # specific value passes it explicitly via extra_env below.
         env.pop("SCT_CWM_RETENTION_DAYS", None)
         if extra_env:
@@ -49,6 +50,7 @@ def run_handoff_validator():
         r = subprocess.run(
             cmd, cwd=str(cwd), capture_output=True, text=True, env=env, check=False
         )
+        assert r.returncode == 0, r.stderr
         return json.loads(r.stdout)
 
     return _run

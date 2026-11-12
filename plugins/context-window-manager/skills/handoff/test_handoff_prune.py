@@ -1,4 +1,4 @@
-# Validator pre-flight should archive a stale sibling handoff once/day and
+# Validator pre-flight should archive a stale sibling slug dir and
 # surface a retention summary, without touching this session's fresh file.
 
 
@@ -11,7 +11,7 @@ def test_validator_prunes_stale_handoff(tmp_path, run_handoff_validator):
     result = run_handoff_validator(cwd=tmp_path, save_root=save_root)
     assert result["ok"] is True
     assert "retention" in result["checks"]  # summary surfaced
-    assert (save_root / "zArchives" / "old-11112222").exists()
+    assert (save_root / "zArchives" / "2026-06" / "old-11112222").exists()
     assert not old.exists()
 
 

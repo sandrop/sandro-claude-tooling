@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.11.0 - 2026-11-12
+
+- `retention.retention_days(env, config_path)` now also reads `[retention] days` from config.toml (env `SCT_CWM_RETENTION_DAYS` still wins), and the default drops from 30 to 7. A bad value or malformed TOML raises `RetentionConfigError`; without `tomllib` the file is skipped and `maybe_prune` adds `config_note`. `prune(save_root, now, days, keep_dir=None)` moves each slug dir whose newest handoff is stale, whole, into `zArchives/YYYY-MM/<slug>/` (`.dupN` on a taken name) and returns `days` and `dirs_moved`; per-file moves and `files_moved` are gone. `maybe_prune(save_root, env=None, keep_dir=None)` drops `today` and the `.last_prune` once-a-day gate and prunes on every call. New `file_timestamp`, `archive_dir_for`, `migrate_archive` and a `migrate [--apply]` CLI. SCT-0081.
+
 ## 0.10.0 - 2026-11-11
 
 - Add `context_schema.split_continue_directive(value)`, which returns `(value_without_directive, True)` when the value ends in `and continue` (case-insensitive, any spacing) or a `--continue` token, else `(value, False)`. It strips one directive only. SCT-0077.

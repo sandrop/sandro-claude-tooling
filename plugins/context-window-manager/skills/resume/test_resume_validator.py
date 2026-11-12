@@ -604,6 +604,35 @@ def test_sibling_newer_handoff_surfaced_as_candidate(tmp_path):
     assert pathlib.Path(c["toplevel"]).resolve() == linked.resolve()
 
 
+def test_sibling_dated_archive_not_surfaced(tmp_path):
+    # A newer handoff for the linked worktree's slug that sits under the dated
+    # archive (zArchives/YYYY-MM/<slug>/) must never surface as a candidate.
+    primary = tmp_path / "primary"
+    primary.mkdir()
+    _init_repo(primary)
+    linked = tmp_path / "linked"
+    subprocess.run(
+        ["git", "worktree", "add", "-q", "-b", "feat/x", str(linked)],
+        cwd=primary,
+        check=True,
+    )
+    save_root = tmp_path / "sct"
+    pd = _save_dir(save_root, primary)
+    (pd / "CONTEXT-2026-08-08-09-09-00.md").write_text(
+        "## Session Summary\n\nprimary handoff\n"
+    )
+    ld = _save_dir(save_root, linked)
+    arch = save_root / "zArchives" / "2026-11" / ld.name
+    arch.mkdir(parents=True)
+    (arch / "CONTEXT-2026-11-08-21-57-00.md").write_text(
+        "## Session Summary\n\narchived feature handoff\n"
+    )
+    out = _run(str(primary), save_root)
+    assert out["checks"]["context_file"] == "CONTEXT-2026-08-08-09-09-00.md"
+    assert out["checks"]["cross_worktree_candidates"] == []
+    assert "zArchives" not in json.dumps(out)
+
+
 def test_single_worktree_no_cross_candidates(tmp_path):
     # A repo with no linked worktree must produce zero sibling candidates
     # (the cwd slug is excluded from its own scan).

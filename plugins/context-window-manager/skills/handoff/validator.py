@@ -54,19 +54,17 @@ def main(argv=None):
         # writes the handoff, and report the resulting target path.
         _save_dir = context_schema.save_dir(Path.cwd(), create=True)
         checks["save_dir"] = str(_save_dir)
-        # Opportunistic once/day retention prune: archive CONTEXT-*.md handoffs
-        # older than N days into the terminal zArchives/ sibling. Runs before
-        # this session's own file is written, so the fresh handoff is never a
-        # candidate. A config error is surfaced loudly as a check value; a prune
-        # must never abort a handoff, so any failure is captured, not raised.
-        import datetime as _dt
-
+        # Retention prune on every handoff: move each slug dir whose newest
+        # CONTEXT-*.md is older than N days into the terminal zArchives/ tree.
+        # Runs before this session's own file is written, so the fresh handoff
+        # is never a candidate. A config error is surfaced loudly as a check
+        # value; a prune must never abort a handoff, so any failure is
+        # captured, not raised.
         import retention
 
         try:
             checks["retention"] = retention.maybe_prune(
                 context_schema.SAVE_ROOT,
-                today=_dt.date.today(),  # noqa: DTZ011 - naive local calendar day; marker is a local-date string
                 keep_dir=_save_dir,  # never relocate this session's own save dir
             )
         except retention.RetentionConfigError as exc:

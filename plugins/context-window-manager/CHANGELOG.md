@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.0 - 2026-11-12
+
+- Retention moves each repo's handoff dir, whole, into `zArchives/YYYY-MM/<slug>/` once its newest handoff is at least N days old, the month taken from that newest handoff. Set N with `[retention] days = N` in `~/.config/sct/context-window-manager/config.toml`, or with `SCT_CWM_RETENTION_DAYS`, which wins over the file. The default drops from 30 days to 7, and the prune now runs on every handoff instead of once a day. `retention.py migrate [--apply]` moves the old `zArchives/<slug>/` tree into the dated layout (dry-run by default, move-only). Bump the plugin manifest and the marketplace catalog to 1.4.0. SCT-0081.
+
 ## 1.3.0 - 2026-11-11
 
 - Handoff spawns the next session inside cmux: a new (or reused, when one with the target name is already in the group) sibling workspace that boots claude, renames itself, and receives the resume line. No config gives an incrementing `-N` name and an inherited sidebar color; optional `[[spawn.stages]]` (with an optional per-stage `sidebar` color for cmux) in `~/.config/sct/context-window-manager/config.toml` gives stage advance with colors. Opt out with `SCT_CWM_SPAWN=0`. Bump the plugin manifest and the marketplace catalog to 1.3.0. SCT-0078.
