@@ -81,6 +81,22 @@
         "claude-code",
         "plugin"
       ]
+    },
+    {
+      "name": "quiver",
+      "source": {
+        "source": "github",
+        "repo": "sandrop/quiver",
+        "ref": "v0.10.1"
+      },
+      "description": "Pick a saved command from a curated TOML pool and insert it into the Claude Code prompt",
+      "keywords": [
+        "commands",
+        "snippets",
+        "toml",
+        "mod"
+      ],
+      "version": "0.10.1"
     }
   ],
   "renames": {
