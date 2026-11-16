@@ -1,7 +1,7 @@
 ---
 name: context-window-common
-version: 0.11.0
-version-date: 2026-11-12
+version: 0.11.1
+version-date: 2026-11-15
 description: Shared library for the handoff and resume skills. Not user-invocable; carries no slash command. Houses context_schema.py (the SessionMetadata schema plus CONTEXT-*.md Session Metadata block render/parse and the collision-resistant filename generator), session_capture.py (read-only git, task, PR, and ADR probes that populate a SessionMetadata), git_drift.py (stored-SHA vs current-HEAD ahead/behind + branch-exists, degrades when not a git repo), and verify_refs.py (extract backticked path refs from handoff text and stat them against the working tree). Bumps independently of its consumers.
 ---
 

@@ -210,6 +210,45 @@ def test_commits_fall_back_to_recent_history_on_the_base_branch(tmp_path):
     assert [c.split(" ", 1)[1] for c in meta.commits] == ["c1: first"]
 
 
+def test_commits_are_empty_on_a_feature_branch_with_no_commits(tmp_path):
+    # A branch still at its base has added nothing, so the base branch's
+    # history must not be reported as this session's work.
+    _init_repo(tmp_path)
+    _run(tmp_path, "git", "checkout", "-qb", "feat/x")
+    assert session_capture.collect_git(str(tmp_path)).commits == []
+
+
+def test_commits_fall_back_to_recent_history_when_no_base_resolves(tmp_path):
+    # No main, master or origin/* exists, so there is no divergence to
+    # measure and recent history is the only signal left.
+    _init_repo(tmp_path)
+    _run(tmp_path, "git", "branch", "-m", "trunk")
+    _run(tmp_path, "git", "checkout", "-qb", "feat/x")
+    meta = session_capture.collect_git(str(tmp_path))
+    assert [c.split(" ", 1)[1] for c in meta.commits] == ["c1: first"]
+
+
+def test_commits_fall_back_on_a_detached_head_at_the_base(tmp_path):
+    # A detached checkout of the base (CI, `git checkout <sha>`) is the base.
+    _init_repo(tmp_path)
+    _run(tmp_path, "git", "checkout", "-q", "--detach")
+    meta = session_capture.collect_git(str(tmp_path))
+    assert [c.split(" ", 1)[1] for c in meta.commits] == ["c1: first"]
+
+
+def test_commits_fall_back_on_main_when_base_is_the_remote_ref(tmp_path):
+    # The base resolves as origin/main while the branch is the local main.
+    work = _pushed_repo(tmp_path)
+    meta = session_capture.collect_git(str(work))
+    assert [c.split(" ", 1)[1] for c in meta.commits] == ["c1: first"]
+
+
+def test_branch_ending_in_the_base_name_is_not_the_base(tmp_path):
+    _init_repo(tmp_path)
+    _run(tmp_path, "git", "checkout", "-qb", "feat/main")
+    assert session_capture.collect_git(str(tmp_path)).commits == []
+
+
 def test_commit_list_is_capped(tmp_path):
     # The commit list rides inside a context file, so an old branch must not
     # dump its whole history into it.

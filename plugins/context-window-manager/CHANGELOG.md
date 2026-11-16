@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.1 - 2026-11-15
+
+- The handoff `commits:` list is empty on a feature branch with no commits ahead of its base, instead of listing the base branch's last 20 commits; the recent-history fallback now applies only on the base branch itself, on a detached HEAD, or when no base resolves. Bump the plugin manifest and the marketplace catalog to 1.4.1. SCT-0084.
+
 ## 1.4.0 - 2026-11-12
 
 - Retention moves each repo's handoff dir, whole, into `zArchives/YYYY-MM/<slug>/` once its newest handoff is at least N days old, the month taken from that newest handoff. Set N with `[retention] days = N` in `~/.config/sct/context-window-manager/config.toml`, or with `SCT_CWM_RETENTION_DAYS`, which wins over the file. The default drops from 30 days to 7, and the prune now runs on every handoff instead of once a day. `retention.py migrate [--apply]` moves the old `zArchives/<slug>/` tree into the dated layout (dry-run by default, move-only). Bump the plugin manifest and the marketplace catalog to 1.4.0. SCT-0081.

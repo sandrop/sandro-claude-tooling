@@ -12,7 +12,7 @@
       "name": "context-window-manager",
       "source": "./plugins/context-window-manager",
       "description": "Session context-window handoff and resume: save session state to a home-scoped, per-repo CONTEXT-*.md file and resume from it with git-drift and stale-reference checks.",
-      "version": "1.4.0",
+      "version": "1.4.1",
       "keywords": [
         "context-window",
         "session-handoff",

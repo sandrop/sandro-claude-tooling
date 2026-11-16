@@ -80,6 +80,7 @@ def _git(
             capture_output=True,
             text=True,
             timeout=_GIT_TIMEOUT,
+            check=False,
         )
     except (FileNotFoundError, OSError, subprocess.SubprocessError):
         return subprocess.CompletedProcess(args, returncode=1, stdout="", stderr="")
@@ -231,12 +232,14 @@ def _neutralize_backticks(line: str) -> str:
     return line.replace("`", "'")
 
 
-def _commits(cwd, deadline: "_Deadline | None" = None) -> "list[str]":
+def _commits(cwd, branch: str, deadline: "_Deadline | None" = None) -> "list[str]":
     """Commits this branch added on top of its base, newest first, as
-    `<shortsha> <subject>`. When HEAD is itself the base, or no base resolves,
-    there is no divergence to report, so fall back to the most recent commits:
-    a session spent working directly on the base branch still needs its work
-    listed."""
+    `<shortsha> <subject>`. An empty divergence has two causes: HEAD is the
+    base itself (on the base branch, or detached), or a feature branch has
+    added nothing yet. Only the first falls back to the most recent commits,
+    since a session spent working directly on the base branch still needs its
+    work listed; the second reports `[]`. With no base resolving, fall back
+    too."""
     base = _base_ref(cwd, deadline=deadline)
     if base:
         diverged = _out(
@@ -249,6 +252,8 @@ def _commits(cwd, deadline: "_Deadline | None" = None) -> "list[str]":
         )
         if diverged:
             return [_neutralize_backticks(line) for line in diverged.splitlines()]
+        if branch and branch != base.removeprefix("origin/"):
+            return []
     return [
         _neutralize_backticks(line)
         for line in _out(
@@ -311,6 +316,7 @@ def _default_gh_runner(cwd, *args) -> "subprocess.CompletedProcess[str]":
         capture_output=True,
         text=True,
         timeout=_GIT_TIMEOUT,
+        check=False,
     )
 
 
@@ -467,11 +473,12 @@ def collect_git(cwd, *, deadline: "_Deadline | None" = None) -> SessionMetadata:
         return meta
     state, staged, unstaged, untracked = _working_tree(cwd, deadline=deadline)
     upstream, ahead, behind, pushed = remote_state(cwd, deadline=deadline)
+    branch = _out(cwd, "branch", "--show-current", deadline=deadline)
     return replace(
         meta,
         git_sha=_out(cwd, "rev-parse", "HEAD", deadline=deadline),
         git_sha_short=_out(cwd, "rev-parse", "--short", "HEAD", deadline=deadline),
-        git_branch=_out(cwd, "branch", "--show-current", deadline=deadline),
+        git_branch=branch,
         working_tree=state,
         staged=staged,
         unstaged=unstaged,
@@ -481,5 +488,5 @@ def collect_git(cwd, *, deadline: "_Deadline | None" = None) -> SessionMetadata:
         remote_ahead=ahead,
         remote_behind=behind,
         remote_pushed=pushed,
-        commits=_commits(cwd, deadline=deadline),
+        commits=_commits(cwd, branch, deadline=deadline),
     )

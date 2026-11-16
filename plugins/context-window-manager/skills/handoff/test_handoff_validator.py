@@ -95,6 +95,14 @@ def test_reports_working_tree_capture(tmp_path):
     assert cap["commit_count"] >= 1
 
 
+def test_capture_reports_zero_commits_on_a_fresh_feature_branch(tmp_path):
+    # A branch still at its base has no commits of its own to hand off.
+    _init_repo(tmp_path)
+    _git(tmp_path, "git", "checkout", "-qb", "feat/x")
+    out = _run(str(tmp_path))
+    assert out["checks"]["capture"]["commit_count"] == 0
+
+
 def test_emits_a_metadata_block_the_shared_parser_round_trips(tmp_path):
     # The validator hands the skill a finished block so nothing is ever
     # hand-formatted at write time.

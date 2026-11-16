@@ -68,7 +68,9 @@ def test_real_handoff_round_trips_through_a_written_context_file(tmp_path):
     assert parsed["git_sha"] and len(parsed["git_sha"]) >= 7
     assert parsed["git_branch"]
     assert parsed["working_tree"] in ("clean", "dirty")
-    assert len(parsed["commits"]) >= 1
+    # A fresh feature branch has no commits of its own, so pin the round trip
+    # to what capture saw rather than to the checkout's history.
+    assert len(parsed["commits"]) == out["checks"]["capture"]["commit_count"]
     # Prose sitting above the block must not leak into it.
     assert "Smoke test." not in str(parsed.values())
 

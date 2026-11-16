@@ -528,6 +528,28 @@ def test_continuity_report_present_over_rendered_block(tmp_path):
     assert cont["pr"]["current_state"] is None
 
 
+def test_continuity_report_with_an_empty_commit_list(tmp_path):
+    # A handoff from a feature branch still at its base records `commits: []`;
+    # resume must parse it as empty and report no commits, not fail.
+    import session_capture
+
+    _init_repo(tmp_path)
+    # Pin the base name: _init_repo inherits init.defaultBranch, and a
+    # nonconventional default leaves no base to measure divergence against.
+    subprocess.run(["git", "branch", "-m", "main"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "checkout", "-qb", "feat/x"], cwd=tmp_path, check=True)
+    save_root = tmp_path.parent / f"{tmp_path.name}-empty-sct"
+    d = _save_dir(save_root, tmp_path)
+    meta_obj = session_capture.collect_git(str(tmp_path))
+    assert meta_obj.commits == []
+    (d / "CONTEXT-2026-08-08-12-00-00.md").write_text(
+        context_schema.render_metadata_block(meta_obj)
+    )
+    out = _run(str(tmp_path), save_root)
+    assert not out["errors"]
+    assert out["report"]["continuity"]["commits"] == []
+
+
 def test_continuity_smoke_cwd_match_over_real_render(tmp_path):
     # Fresh-subprocess smoke over the real producer -> consumer seam
     # (subprocess-boundary smoke): capture with session_capture,

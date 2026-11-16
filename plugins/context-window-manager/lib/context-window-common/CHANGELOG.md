@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.11.1 - 2026-11-15
+
+- `session_capture._commits(cwd, branch, deadline)` takes the current branch, which `collect_git` now reads once for both `git_branch` and `_commits`. An empty `<base>..HEAD` divergence returns `[]` on a feature branch; it falls back to the last 20 commits only when HEAD is detached or the branch equals the base with any `origin/` prefix stripped (exact match, so `feat/main` is not the base). The no-base fallback is unchanged. SCT-0084.
+
 ## 0.11.0 - 2026-11-12
 
 - `retention.retention_days(env, config_path)` now also reads `[retention] days` from config.toml (env `SCT_CWM_RETENTION_DAYS` still wins), and the default drops from 30 to 7. A bad value or malformed TOML raises `RetentionConfigError`; without `tomllib` the file is skipped and `maybe_prune` adds `config_note`. `prune(save_root, now, days, keep_dir=None)` moves each slug dir whose newest handoff is stale, whole, into `zArchives/YYYY-MM/<slug>/` (`.dupN` on a taken name) and returns `days` and `dirs_moved`; per-file moves and `files_moved` are gone. `maybe_prune(save_root, env=None, keep_dir=None)` drops `today` and the `.last_prune` once-a-day gate and prunes on every call. New `file_timestamp`, `archive_dir_for`, `migrate_archive` and a `migrate [--apply]` CLI. SCT-0081.
