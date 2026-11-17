@@ -23,19 +23,25 @@ default_install_hook_types: [pre-commit, pre-push]
 default_language_version:
   python: python3.12
 
-# Verbose (?x) regex so this stays readable as it grows.
+# Verbose (?x) regex so this stays readable as it grows. One reason per entry:
 #
+# node_modules: installed third-party JS.
+# new-project-resources: byte-frozen mirrors of the six canonical configs;
+# the fixers must not rewrite them.
+# skills-reference: vendored upstream skill trees.
+# reports: generated output.
 # skills/cobtask-review/snapshots: the committed content-snapshot store, byte-
 # frozen copies of the decommissioned sources hashed into manifest.json (CCC-0353).
 # end-of-file-fixer and trailing-whitespace would rewrite those files in place,
 # so the exclusion has to live here.
+#
+# hooks was dropped in CCC-0396: every managed repo's root hooks/ holds source.
 exclude: |
   (?x)^(
     node_modules|
     new-project-resources|
     skills-reference|
     reports|
-    hooks|
     skills/cobtask-review/snapshots
   )/
 
@@ -64,9 +70,14 @@ repos:
     rev: v6.0.0
     hooks:
       # --- Fixers ---
+      # rtk-rewrite.sh is rtk-generated and pinned by hooks/.rtk-hook.sha256;
+      # a rewrite breaks rtk's integrity check (CCC-0396).
       - id: end-of-file-fixer
+        exclude: ^hooks/rtk-rewrite\.sh$
       - id: trailing-whitespace
+        exclude: ^hooks/rtk-rewrite\.sh$
       - id: mixed-line-ending
+        exclude: ^hooks/rtk-rewrite\.sh$
 
       # --- Safety ---
       # Refuse direct commits to main/master. Force feature-branch workflow
